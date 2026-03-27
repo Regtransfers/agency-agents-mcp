@@ -32,7 +32,7 @@ Agent categories include: `engineering`, `design`, `marketing`, `testing`, `sale
 ## Quick Install
 
 ```bash
-git clone https://github.com/YOUR_ORG/agency-agents-mcp.git
+git clone https://github.com/Regtransfers/agency-agents-mcp.git
 cd agency-agents-mcp
 chmod +x install.sh
 ./install.sh
@@ -254,4 +254,5 @@ MCP server built on the [@modelcontextprotocol/sdk](https://www.npmjs.com/packag
 ## Licence
 
 MIT
+
 
