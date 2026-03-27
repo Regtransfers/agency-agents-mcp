@@ -1,4 +1,4 @@
-# -------------------------------------------------------------------
+﻿# -------------------------------------------------------------------
 # Agency Agents MCP — Automated Installer (Windows PowerShell)
 #
 # Run this from the cloned repo root:
@@ -57,8 +57,11 @@ if ($existingAgents.Count -gt 0) {
     } else {
         Info "Updating agents from $AgentsRepo ..."
         $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("agency-agents-" + [guid]::NewGuid().ToString("N").Substring(0,8))
-        git clone --depth 1 $AgentsRepo $tmpDir 2>$null
-        Copy-Item (Join-Path $tmpDir "agents\*.md") -Destination $AgentsDir -Force
+        $gitOutput = git clone --quiet --depth 1 $AgentsRepo $tmpDir 2>&1
+        if ($LASTEXITCODE -ne 0) { Fail "git clone failed: $gitOutput" }
+        Get-ChildItem -Path $tmpDir -Filter "*.md" -Recurse |
+            Where-Object { $_.DirectoryName -ne $tmpDir } |
+            Copy-Item -Destination $AgentsDir -Force
         Remove-Item $tmpDir -Recurse -Force
         $count = (Get-ChildItem -Path $AgentsDir -Filter "*.md").Count
         Info "$count agents installed."
@@ -67,8 +70,11 @@ if ($existingAgents.Count -gt 0) {
     Info "Downloading agent definitions from $AgentsRepo ..."
     New-Item -ItemType Directory -Path $AgentsDir -Force | Out-Null
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("agency-agents-" + [guid]::NewGuid().ToString("N").Substring(0,8))
-    git clone --depth 1 $AgentsRepo $tmpDir 2>$null
-    Copy-Item (Join-Path $tmpDir "agents\*.md") -Destination $AgentsDir -Force
+    $gitOutput = git clone --quiet --depth 1 $AgentsRepo $tmpDir 2>&1
+    if ($LASTEXITCODE -ne 0) { Fail "git clone failed: $gitOutput" }
+    Get-ChildItem -Path $tmpDir -Filter "*.md" -Recurse |
+        Where-Object { $_.DirectoryName -ne $tmpDir } |
+        Copy-Item -Destination $AgentsDir -Force
     Remove-Item $tmpDir -Recurse -Force
     $count = (Get-ChildItem -Path $AgentsDir -Filter "*.md").Count
     Info "$count agents installed to $AgentsDir"
@@ -90,12 +96,15 @@ Info "MCP server installed."
 
 # ── Step 3: Verify server starts ─────────────────────────────────────
 Info "Verifying server starts..."
+$tmpOut = [System.IO.Path]::GetTempFileName()
+$tmpErr = [System.IO.Path]::GetTempFileName()
 $serverProc = Start-Process -FilePath "node" -ArgumentList (Join-Path $ServerDir "server.mjs") `
-    -NoNewWindow -PassThru -RedirectStandardInput "NUL" -RedirectStandardOutput "NUL" -RedirectStandardError "NUL"
+    -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
 Start-Sleep -Seconds 2
 if (-not $serverProc.HasExited) {
     $serverProc.Kill()
 }
+Remove-Item $tmpOut, $tmpErr -Force -ErrorAction SilentlyContinue
 Info "Server binary OK."
 
 # ── Step 4: Write Copilot MCP config ─────────────────────────────────
