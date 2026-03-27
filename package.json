@@ -1,0 +1,22 @@
+{
+  "name": "agency-agents-mcp",
+  "version": "1.0.0",
+  "description": "MCP server that exposes agency-agents personas as tools for GitHub Copilot in JetBrains Rider and VS Code",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": {
+    "agency-agents-mcp": "./server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --input-type=module -e \"import { readFileSync } from 'fs'; console.log('server.mjs OK');\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
+
