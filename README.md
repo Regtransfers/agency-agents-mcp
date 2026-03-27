@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that gives GitHub Copilot access to 160+ specialist AI agent personas. Once installed, you can ask Copilot to "be a backend architect" or "activate the security engineer" and it will adopt that specialist's full personality, expertise, and methodology for the rest of the conversation.
 
-Works with **JetBrains Rider**, **IntelliJ**, and **VS Code**.
+Works with **JetBrains Rider**, **IntelliJ**, and **VS Code** on **Linux**, **macOS**, and **Windows**.
 
 ---
 
@@ -31,11 +31,22 @@ Agent categories include: `engineering`, `design`, `marketing`, `testing`, `sale
 
 ## Quick Install
 
+### Linux / macOS
+
 ```bash
 git clone https://github.com/Regtransfers/agency-agents-mcp.git
 cd agency-agents-mcp
 chmod +x install.sh
 ./install.sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/Regtransfers/agency-agents-mcp.git
+cd agency-agents-mcp
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\install.ps1
 ```
 
 The script will:
@@ -83,9 +94,15 @@ node ~/.github/mcp-servers/agency-agents/server.mjs
 
 Create the MCP config file. Replace `/home/yourname` with your actual home directory.
 
-**JetBrains Rider / IntelliJ** — `~/.config/github-copilot/intellij/mcp.json`
+**Linux / macOS:**
 
-**VS Code** — `~/.config/github-copilot/vscode/mcp.json`
+- **JetBrains Rider / IntelliJ** — `~/.config/github-copilot/intellij/mcp.json`
+- **VS Code** — `~/.config/github-copilot/vscode/mcp.json`
+
+**Windows:**
+
+- **JetBrains Rider / IntelliJ** — `%APPDATA%\github-copilot\intellij\mcp.json`
+- **VS Code** — `%APPDATA%\github-copilot\vscode\mcp.json`
 
 Contents (identical for both):
 
@@ -175,16 +192,35 @@ Then restart the IDE.
 
 ## Uninstall
 
+### Linux / macOS
+
 ```bash
 chmod +x uninstall.sh
 ./uninstall.sh
 ```
 
+### Windows (PowerShell)
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\uninstall.ps1
+```
+
 Or manually:
+
+**Linux / macOS:**
 
 ```bash
 rm -rf ~/.github/agents
 rm -rf ~/.github/mcp-servers/agency-agents
+# Then remove the "agency-agents" block from your mcp.json
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item "$env:USERPROFILE\.github\agents" -Recurse -Force
+Remove-Item "$env:USERPROFILE\.github\mcp-servers\agency-agents" -Recurse -Force
 # Then remove the "agency-agents" block from your mcp.json
 ```
 
@@ -193,6 +229,8 @@ Restart the IDE after uninstalling.
 ---
 
 ## Directory Layout After Install
+
+**Linux / macOS:**
 
 ```
 ~/.github/
@@ -213,6 +251,26 @@ Restart the IDE after uninstalling.
 ├── intellij/
 │   └── mcp.json                              # Rider/IntelliJ config
 └── vscode/
+    └── mcp.json                              # VS Code config
+```
+
+**Windows:**
+
+```
+%USERPROFILE%\.github\
+├── agents\                                   # Agent persona .md files
+│   └── ... (160+ files)
+└── mcp-servers\
+    └── agency-agents\
+        ├── server.mjs
+        ├── package.json
+        ├── package-lock.json
+        └── node_modules\
+
+%APPDATA%\github-copilot\
+├── intellij\
+│   └── mcp.json                              # Rider/IntelliJ config
+└── vscode\
     └── mcp.json                              # VS Code config
 ```
 
