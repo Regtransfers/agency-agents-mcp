@@ -13,8 +13,37 @@ import { homedir } from "os";
 // ---------------------------------------------------------------------------
 const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents");
 
+// ---------------------------------------------------------------------------
+// Shared instructions — loaded once at startup.
+// Every .md file in this directory is prepended to every agent activation so
+// that all personas share the same baseline standards (e.g. clean code rules).
+// Override the directory with the SHARED_INSTRUCTIONS_DIR environment variable.
+// ---------------------------------------------------------------------------
+const SHARED_INSTRUCTIONS_DIR =
+  process.env.SHARED_INSTRUCTIONS_DIR ||
+  join(homedir(), ".github", "shared-instructions");
+
 /** @type {Map<string, {slug: string, name: string, description: string, body: string}>} */
 const catalogue = new Map();
+
+/** @type {string} Combined text of all shared instruction files */
+let sharedInstructions = "";
+
+function loadSharedInstructions() {
+  if (!existsSync(SHARED_INSTRUCTIONS_DIR)) return;
+
+  const files = readdirSync(SHARED_INSTRUCTIONS_DIR)
+    .filter((f) => f.endsWith(".md"))
+    .sort();
+
+  const parts = [];
+  for (const file of files) {
+    const content = readFileSync(join(SHARED_INSTRUCTIONS_DIR, file), "utf-8").trim();
+    if (content) parts.push(content);
+  }
+
+  sharedInstructions = parts.join("\n\n---\n\n");
+}
 
 function loadAgents() {
   if (!existsSync(AGENTS_DIR)) return;
@@ -46,6 +75,7 @@ function loadAgents() {
   }
 }
 
+loadSharedInstructions();
 loadAgents();
 
 // ---------------------------------------------------------------------------
@@ -179,11 +209,22 @@ server.tool(
       };
     }
 
+    // Build the activation text: shared instructions (if any) + agent persona
+    const sections = [];
+    if (sharedInstructions) {
+      sections.push(
+        `## Shared Standards\n\nThe following standards apply to ALL work you produce, regardless of your persona:\n\n${sharedInstructions}`
+      );
+    }
+    sections.push(
+      `## Agent Persona: ${agent.name}\n\n${agent.body}`
+    );
+
     return {
       content: [
         {
           type: "text",
-          text: `# Activating Agent: ${agent.name}\n\nYou are now adopting the following persona and instructions. Follow them for the rest of this conversation unless told otherwise.\n\n---\n\n${agent.body}`,
+          text: `# Activating Agent: ${agent.name}\n\nYou are now adopting the following persona and instructions. Follow them for the rest of this conversation unless told otherwise.\n\n---\n\n${sections.join("\n\n---\n\n")}`,
         },
       ],
     };
@@ -234,6 +275,39 @@ server.tool(
         {
           type: "text",
           text: `## Search Results for "${keyword}" (${matches.length} match${matches.length === 1 ? "" : "es"})\n\n${lines.join("\n")}`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 4: view shared instructions that apply to all agents
+server.tool(
+  "get_shared_instructions",
+  "View the shared instructions (e.g. clean code standards) that are automatically applied to every agent activation. Useful to see what baseline rules all agents follow.",
+  {},
+  async () => {
+    if (!sharedInstructions) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No shared instructions are configured. To add them, place .md files in the shared instructions directory and restart the server.",
+          },
+        ],
+      };
+    }
+
+    // Count the files
+    const fileCount = existsSync(SHARED_INSTRUCTIONS_DIR)
+      ? readdirSync(SHARED_INSTRUCTIONS_DIR).filter((f) => f.endsWith(".md")).length
+      : 0;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `## Shared Instructions (${fileCount} file${fileCount === 1 ? "" : "s"})\n\nThese are automatically prepended to every agent activation:\n\n---\n\n${sharedInstructions}`,
         },
       ],
     };

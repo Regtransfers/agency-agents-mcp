@@ -14,11 +14,13 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 
 AGENTS_DIR="$HOME/.github/agents"
 SERVER_DIR="$HOME/.github/mcp-servers/agency-agents"
+SHARED_INSTRUCTIONS_DIR="$HOME/.github/shared-instructions"
 
 echo ""
 echo "This will remove:"
-echo "  - Agent definitions:   $AGENTS_DIR"
-echo "  - MCP server:          $SERVER_DIR"
+echo "  - Agent definitions:      $AGENTS_DIR"
+echo "  - Shared instructions:    $SHARED_INSTRUCTIONS_DIR"
+echo "  - MCP server:             $SERVER_DIR"
 echo "  - agency-agents entry from Copilot MCP configs"
 echo ""
 read -rp "Continue? [y/N] " answer
@@ -33,6 +35,14 @@ if [ -d "$AGENTS_DIR" ]; then
   info "Removed $AGENTS_DIR"
 else
   info "No agents directory found."
+fi
+
+# Remove shared instructions
+if [ -d "$SHARED_INSTRUCTIONS_DIR" ]; then
+  rm -rf "$SHARED_INSTRUCTIONS_DIR"
+  info "Removed $SHARED_INSTRUCTIONS_DIR"
+else
+  info "No shared instructions directory found."
 fi
 
 # Remove server

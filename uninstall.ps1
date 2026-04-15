@@ -6,14 +6,16 @@ $ErrorActionPreference = "Stop"
 
 $AgentsDir = Join-Path $env:USERPROFILE ".github\agents"
 $ServerDir = Join-Path $env:USERPROFILE ".github\mcp-servers\agency-agents"
+$SharedInstructionsDir = Join-Path $env:USERPROFILE ".github\shared-instructions"
 
 function Info($msg)  { Write-Host "[INFO]  $msg" -ForegroundColor Green }
 function Warn($msg)  { Write-Host "[WARN]  $msg" -ForegroundColor Yellow }
 
 Write-Host ""
 Write-Host "This will remove:"
-Write-Host "  - Agent definitions:   $AgentsDir"
-Write-Host "  - MCP server:          $ServerDir"
+Write-Host "  - Agent definitions:      $AgentsDir"
+Write-Host "  - Shared instructions:    $SharedInstructionsDir"
+Write-Host "  - MCP server:             $ServerDir"
 Write-Host "  - agency-agents entry from Copilot MCP configs"
 Write-Host ""
 $answer = Read-Host "Continue? [y/N]"
@@ -28,6 +30,14 @@ if (Test-Path $AgentsDir) {
     Info "Removed $AgentsDir"
 } else {
     Info "No agents directory found."
+}
+
+# Remove shared instructions
+if (Test-Path $SharedInstructionsDir) {
+    Remove-Item $SharedInstructionsDir -Recurse -Force
+    Info "Removed $SharedInstructionsDir"
+} else {
+    Info "No shared instructions directory found."
 }
 
 # Remove server
@@ -59,4 +69,6 @@ foreach ($config in $configPaths) {
 
 Write-Host ""
 Info "Uninstall complete. Restart your IDE to apply."
+
+
 

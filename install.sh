@@ -21,6 +21,7 @@ NC='\033[0m' # No colour
 
 AGENTS_DIR="$HOME/.github/agents"
 SERVER_DIR="$HOME/.github/mcp-servers/agency-agents"
+SHARED_INSTRUCTIONS_DIR="$HOME/.github/shared-instructions"
 AGENTS_REPO="https://github.com/msitarzewski/agency-agents.git"
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -51,6 +52,16 @@ if ! version_ge "$NODE_VERSION" "18.0.0"; then
 fi
 info "Node.js v$NODE_VERSION — OK"
 
+# Resolve the absolute path to the node binary.
+# IDEs (Rider, VS Code) do NOT inherit your shell's PATH, so "node" alone
+# will fail if it was installed via nvm, fnm, nodenv, Homebrew, etc.
+NODE_BIN="$(command -v node)"
+# Follow symlinks to get the real path (works on Linux and macOS)
+if command -v readlink &>/dev/null && readlink -f "$NODE_BIN" &>/dev/null; then
+  NODE_BIN="$(readlink -f "$NODE_BIN")"
+fi
+info "Using node binary: $NODE_BIN"
+
 # ── Step 1: Download agent definitions ───────────────────────────────
 if [ -d "$AGENTS_DIR" ] && [ "$(ls -A "$AGENTS_DIR"/*.md 2>/dev/null | wc -l)" -gt 0 ]; then
   EXISTING=$(ls "$AGENTS_DIR"/*.md 2>/dev/null | wc -l)
@@ -76,22 +87,49 @@ else
   info "$(ls "$AGENTS_DIR"/*.md | wc -l) agents installed to $AGENTS_DIR"
 fi
 
+# ── Step 1b: Install shared instructions ─────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -d "$SHARED_INSTRUCTIONS_DIR" ] && [ "$(ls -A "$SHARED_INSTRUCTIONS_DIR"/*.md 2>/dev/null | wc -l)" -gt 0 ]; then
+  EXISTING_SI=$(ls "$SHARED_INSTRUCTIONS_DIR"/*.md 2>/dev/null | wc -l)
+  info "Shared instructions directory already exists with $EXISTING_SI file(s)."
+  read -rp "    Overwrite with defaults from this repo? [y/N] " si_answer
+  if [[ "${si_answer,,}" != "y" ]]; then
+    info "Keeping existing shared instructions."
+  else
+    info "Updating shared instructions..."
+    cp "$SCRIPT_DIR"/shared-instructions/*.md "$SHARED_INSTRUCTIONS_DIR/"
+    info "Shared instructions updated."
+  fi
+else
+  info "Installing shared instructions to $SHARED_INSTRUCTIONS_DIR ..."
+  mkdir -p "$SHARED_INSTRUCTIONS_DIR"
+  cp "$SCRIPT_DIR"/shared-instructions/*.md "$SHARED_INSTRUCTIONS_DIR/"
+  info "$(ls "$SHARED_INSTRUCTIONS_DIR"/*.md | wc -l) shared instruction file(s) installed."
+fi
+
 # ── Step 2: Install MCP server ───────────────────────────────────────
 info "Installing MCP server to $SERVER_DIR ..."
 mkdir -p "$SERVER_DIR"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 cp "$SCRIPT_DIR/server.mjs"   "$SERVER_DIR/server.mjs"
 cp "$SCRIPT_DIR/package.json" "$SERVER_DIR/package.json"
 
-(cd "$SERVER_DIR" && npm install --production --silent 2>&1)
+info "Running npm install (this may take a moment)..."
+if ! (cd "$SERVER_DIR" && npm install --production 2>&1); then
+  fail "npm install failed. Check the output above."
+fi
 info "MCP server installed."
 
 # ── Step 3: Verify server starts ─────────────────────────────────────
 info "Verifying server starts..."
-timeout 3 node "$SERVER_DIR/server.mjs" </dev/null >/dev/null 2>&1 || true
-info "Server binary OK."
+SERVER_ERR=$(timeout 3 "$NODE_BIN" "$SERVER_DIR/server.mjs" </dev/null 2>&1 || true)
+# The server is expected to time out (it blocks on stdin).
+# If it printed an error (e.g. missing module), show it.
+if echo "$SERVER_ERR" | grep -qi "error\|cannot find\|MODULE_NOT_FOUND"; then
+  fail "Server failed to start:\n$SERVER_ERR"
+fi
+info "Server starts OK."
 
 # ── Step 4: Write Copilot MCP config ─────────────────────────────────
 write_mcp_config() {
@@ -101,17 +139,18 @@ write_mcp_config() {
 
   mkdir -p "$config_dir"
 
-  # Build the JSON with the resolved home directory
+  # Build the JSON with the fully resolved node path and home directory
   local config
   config=$(cat <<MCPJSON
 {
     "servers": {
         "agency-agents": {
             "type": "stdio",
-            "command": "node",
+            "command": "$NODE_BIN",
             "args": ["$SERVER_DIR/server.mjs"],
             "env": {
-                "AGENTS_DIR": "$AGENTS_DIR"
+                "AGENTS_DIR": "$AGENTS_DIR",
+                "SHARED_INSTRUCTIONS_DIR": "$SHARED_INSTRUCTIONS_DIR"
             }
         }
     }
@@ -171,8 +210,9 @@ echo "========================================"
 info "Installation complete."
 echo "========================================"
 echo ""
-echo "  Agents directory: $AGENTS_DIR"
-echo "  MCP server:       $SERVER_DIR/server.mjs"
+echo "  Agents directory:             $AGENTS_DIR"
+echo "  Shared instructions directory: $SHARED_INSTRUCTIONS_DIR"
+echo "  MCP server:                    $SERVER_DIR/server.mjs"
 echo ""
 echo "  Next steps:"
 echo "    1. Restart your IDE (Rider / VS Code)"
@@ -181,5 +221,6 @@ echo "    3. Try: 'List available agents'"
 echo "    4. Try: 'Activate the backend architect agent'"
 echo ""
 echo "  To add a custom agent, drop a .md file into $AGENTS_DIR and restart the IDE."
+echo "  To customise shared instructions, edit files in $SHARED_INSTRUCTIONS_DIR and restart the IDE."
 echo ""
 

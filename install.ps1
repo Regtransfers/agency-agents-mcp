@@ -16,6 +16,7 @@ $ErrorActionPreference = "Stop"
 
 $AgentsDir = Join-Path $env:USERPROFILE ".github\agents"
 $ServerDir = Join-Path $env:USERPROFILE ".github\mcp-servers\agency-agents"
+$SharedInstructionsDir = Join-Path $env:USERPROFILE ".github\shared-instructions"
 $AgentsRepo = "https://github.com/msitarzewski/agency-agents.git"
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -42,6 +43,12 @@ if ($nodeMajor -lt 18) {
     Fail "Node.js >= 18 is required. Found v$nodeVersion."
 }
 Info "Node.js v$nodeVersion — OK"
+
+# Resolve the absolute path to the node binary.
+# IDEs (Rider, VS Code) do NOT inherit your shell's PATH, so "node" alone
+# will fail if it was installed via nvm, fnm, or a non-standard location.
+$NodeBin = (Get-Command node).Source
+Info "Using node binary: $NodeBin"
 
 # ── Step 1: Download agent definitions ───────────────────────────────
 $existingAgents = @()
@@ -80,32 +87,68 @@ if ($existingAgents.Count -gt 0) {
     Info "$count agents installed to $AgentsDir"
 }
 
+# ── Step 1b: Install shared instructions ─────────────────────────────
+$scriptDir = $PSScriptRoot
+
+$existingSharedInstructions = @()
+if (Test-Path $SharedInstructionsDir) {
+    $existingSharedInstructions = Get-ChildItem -Path $SharedInstructionsDir -Filter "*.md" -ErrorAction SilentlyContinue
+}
+
+if ($existingSharedInstructions.Count -gt 0) {
+    Info "Shared instructions directory already exists with $($existingSharedInstructions.Count) file(s)."
+    $siAnswer = Read-Host "    Overwrite with defaults from this repo? [y/N]"
+    if ($siAnswer -ne "y" -and $siAnswer -ne "Y") {
+        Info "Keeping existing shared instructions."
+    } else {
+        Info "Updating shared instructions..."
+        Copy-Item (Join-Path $scriptDir "shared-instructions\*.md") -Destination $SharedInstructionsDir -Force
+        Info "Shared instructions updated."
+    }
+} else {
+    Info "Installing shared instructions to $SharedInstructionsDir ..."
+    New-Item -ItemType Directory -Path $SharedInstructionsDir -Force | Out-Null
+    Copy-Item (Join-Path $scriptDir "shared-instructions\*.md") -Destination $SharedInstructionsDir -Force
+    $siCount = (Get-ChildItem -Path $SharedInstructionsDir -Filter "*.md").Count
+    Info "$siCount shared instruction file(s) installed."
+}
+
 # ── Step 2: Install MCP server ───────────────────────────────────────
 Info "Installing MCP server to $ServerDir ..."
 New-Item -ItemType Directory -Path $ServerDir -Force | Out-Null
 
-$scriptDir = $PSScriptRoot
-
 Copy-Item (Join-Path $scriptDir "server.mjs")   -Destination (Join-Path $ServerDir "server.mjs")   -Force
 Copy-Item (Join-Path $scriptDir "package.json") -Destination (Join-Path $ServerDir "package.json") -Force
 
+Info "Running npm install (this may take a moment)..."
 Push-Location $ServerDir
-npm install --production --silent 2>&1 | Out-Null
+$npmOutput = npm install --production 2>&1
+$npmExit = $LASTEXITCODE
 Pop-Location
+if ($npmExit -ne 0) {
+    Write-Host $npmOutput
+    Fail "npm install failed. Check the output above."
+}
 Info "MCP server installed."
 
 # ── Step 3: Verify server starts ─────────────────────────────────────
 Info "Verifying server starts..."
-$tmpOut = [System.IO.Path]::GetTempFileName()
-$tmpErr = [System.IO.Path]::GetTempFileName()
-$serverProc = Start-Process -FilePath "node" -ArgumentList (Join-Path $ServerDir "server.mjs") `
-    -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
-Start-Sleep -Seconds 2
-if (-not $serverProc.HasExited) {
-    $serverProc.Kill()
+$serverMjs = Join-Path $ServerDir "server.mjs"
+try {
+    $tmpOut = [System.IO.Path]::GetTempFileName()
+    $tmpErr = [System.IO.Path]::GetTempFileName()
+    $proc = Start-Process -FilePath $NodeBin -ArgumentList $serverMjs `
+        -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
+    Start-Sleep -Seconds 2
+    if ($proc.HasExited -and $proc.ExitCode -ne 0) {
+        Fail "Server exited with code $($proc.ExitCode). Run 'node $serverMjs' manually to see the error."
+    }
+    if (-not $proc.HasExited) { $proc.Kill() }
+    Remove-Item $tmpOut, $tmpErr -Force -ErrorAction SilentlyContinue
+    Info "Server starts OK."
+} catch {
+    Fail "Server failed to start: $_"
 }
-Remove-Item $tmpOut, $tmpErr -Force -ErrorAction SilentlyContinue
-Info "Server binary OK."
 
 # ── Step 4: Write Copilot MCP config ─────────────────────────────────
 function Write-McpConfig {
@@ -113,19 +156,22 @@ function Write-McpConfig {
 
     $configFile = Join-Path $ConfigDir "mcp.json"
 
-    # Use forward slashes in JSON paths for cross-platform compat
+    # Use forward slashes in JSON paths for Node.js compatibility
+    $nodePath   = $NodeBin -replace '\\', '/'
     $serverPath = (Join-Path $ServerDir "server.mjs") -replace '\\', '/'
     $agentsPath = $AgentsDir -replace '\\', '/'
+    $sharedPath = $SharedInstructionsDir -replace '\\', '/'
 
     $config = @"
 {
     "servers": {
         "agency-agents": {
             "type": "stdio",
-            "command": "node",
+            "command": "$nodePath",
             "args": ["$serverPath"],
             "env": {
-                "AGENTS_DIR": "$agentsPath"
+                "AGENTS_DIR": "$agentsPath",
+                "SHARED_INSTRUCTIONS_DIR": "$sharedPath"
             }
         }
     }
@@ -184,8 +230,9 @@ Write-Host "========================================"
 Info "Installation complete."
 Write-Host "========================================"
 Write-Host ""
-Write-Host "  Agents directory: $AgentsDir"
-Write-Host "  MCP server:       $(Join-Path $ServerDir 'server.mjs')"
+Write-Host "  Agents directory:             $AgentsDir"
+Write-Host "  Shared instructions directory: $SharedInstructionsDir"
+Write-Host "  MCP server:                    $(Join-Path $ServerDir 'server.mjs')"
 Write-Host ""
 Write-Host "  Next steps:"
 Write-Host "    1. Restart your IDE (Rider / VS Code)"
@@ -194,5 +241,6 @@ Write-Host "    3. Try: 'List available agents'"
 Write-Host "    4. Try: 'Activate the backend architect agent'"
 Write-Host ""
 Write-Host "  To add a custom agent, drop a .md file into $AgentsDir and restart the IDE."
+Write-Host "  To customise shared instructions, edit files in $SharedInstructionsDir and restart the IDE."
 Write-Host ""
 
