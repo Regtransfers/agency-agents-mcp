@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node http-wrapper.mjs",
     "start:stdio": "node server.mjs",
-    "test": "node --input-type=module -e \"import { readFileSync } from 'fs'; console.log('server.mjs OK');\""
+    "test": "node test-server.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

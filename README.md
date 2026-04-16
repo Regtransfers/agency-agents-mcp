@@ -1,18 +1,38 @@
 # Agency Agents MCP Server
-An MCP (Model Context Protocol) server that gives GitHub Copilot access to 160+ specialist AI agent personas. Once installed, you can ask Copilot to "be a backend architect" or "activate the security engineer" and it will adopt that specialist's full personality, expertise, and methodology for the rest of the conversation.
+An MCP (Model Context Protocol) server that gives GitHub Copilot access to **160+ specialist AI agent personas** and **1,400+ specialized skills**. Once installed, you can ask Copilot to "be a backend architect" or "activate the security engineer" (agents), or "use brainstorming" or "activate TDD" (skills) and it will adopt that specialist's full personality, expertise, and methodology for the rest of the conversation.
 Works with **JetBrains Rider**, **IntelliJ**, and **VS Code** on **Linux**, **macOS**, and **Windows**.
 Deployable as a **Docker container** with Azure DevOps pipeline support.
+
+> **⚡ Quick Start for Developers:** See the [**Quick Reference Guide**](QUICK-REFERENCE.md) for the top 10 most useful skills, ready-to-use commands, and real-world workflows.
+
 ---
 ## What You Get
-Five tools are exposed to Copilot's agent mode:
+Ten tools are exposed to Copilot's agent mode:
+
+### Agent Tools
 | Tool | What it does |
 |---|---|
 | `list_agents` | List all installed personas, optionally filtered by category |
 | `activate_agent` | Load a persona so the AI adopts that specialist role |
 | `search_agents` | Full-text search across agent names, descriptions, and content |
 | `get_shared_instructions` | View the shared instructions (e.g. clean code standards) applied to every agent |
-| `healthz` | RPC-based health check endpoint for Kubernetes probes (see [HEALTHZ-RPC.md](HEALTHZ-RPC.md)) |
+
 Agent categories include: `engineering`, `design`, `marketing`, `testing`, `sales`, `product`, `academic`, `support`, `game-development`, `specialized`, `project-management`, `paid-media`, `spatial-computing`, and more.
+
+### Skill Tools
+| Tool | What it does |
+|---|---|
+| `list_skills` | List all available skills, optionally filtered by category |
+| `activate_skill` | Load a skill so the AI follows those specialized instructions |
+| `search_skills` | Full-text search across skill names, descriptions, and content |
+| `get_skill_categories` | View all skill categories with counts |
+
+Skill categories include: `ai-ml`, `backend`, `frontend`, `security`, `testing`, `automation`, `design`, `marketing`, `data`, `workflow`, `devops`, and many more.
+
+### System Tools
+| Tool | What it does |
+|---|---|
+| `healthz` | RPC-based health check endpoint for Kubernetes probes (see [HEALTHZ-RPC.md](HEALTHZ-RPC.md)) |
 ---
 ## Prerequisites
 ### Local Development
@@ -52,9 +72,10 @@ git clone https://github.com/Regtransfers/agency-agents-mcp.git
 cd agency-agents-mcp
 \`\`\`
 The repository includes:
-- 160+ agent personas in \`./agents/\`
-- Shared instructions (clean code standards) in \`./shared-instructions/\`
-- The MCP server (\`server.mjs\`) configured to use local folders
+- 160+ agent personas in `./agents/`
+- 1,400+ specialized skills in `./skills/`
+- Shared instructions (clean code standards) in `./shared-instructions/`
+- The MCP server (`server.mjs`) configured to use local folders
 ### 2. Install dependencies
 \`\`\`bash
 npm install --production
@@ -119,26 +140,164 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
     }
 }
 "@ | Set-Content "$dir\\mcp.json"
-\`\`\`
-The server automatically uses the \`./agents/\` and \`./shared-instructions/\` folders from the project directory. You can override with environment variables \`AGENTS_DIR\` and \`SHARED_INSTRUCTIONS_DIR\` if needed.
+```
+The server automatically uses the `./agents/`, `./skills/`, and `./shared-instructions/` folders from the project directory. You can override with environment variables `AGENTS_DIR`, `SKILLS_DIR`, and `SHARED_INSTRUCTIONS_DIR` if needed.
 ### 5. Restart the IDE
 Close and reopen your IDE. The Copilot plugin reads \`mcp.json\` at startup and launches the server automatically.
 ---
 ## Usage
 Open Copilot Chat in **agent mode** and try:
-\`\`\`
+
+### Working with Agents
+```
 List available agents
-\`\`\`
-\`\`\`
+```
+```
 Activate the backend architect agent and review my API design
-\`\`\`
-\`\`\`
+```
+```
 Search for agents about security
-\`\`\`
-\`\`\`
+```
+```
 List engineering agents
-\`\`\`
-When you activate an agent, the AI adopts that persona for the rest of the conversation. Start a new chat to reset.
+```
+
+### Working with Skills
+```
+List available skills
+```
+```
+Activate the brainstorming skill
+```
+```
+Search for skills about testing
+```
+```
+Show me all skill categories
+```
+```
+List skills in the ai-ml category
+```
+
+When you activate an agent or skill, the AI adopts those instructions for the rest of the conversation. Start a new chat to reset.
+
+> **📘 New to Skills?** See the [**Skills Guide**](SKILLS-GUIDE.md) for a comprehensive introduction to the 1,400+ available skills, including categories, best practices, and usage examples.
+> 
+> **⚡ Development Teams?** Check out the [**Quick Reference**](QUICK-REFERENCE.md) for the top 10 skills and real-world workflow examples tailored for feature development, testing, and infrastructure deployment.
+
+---
+## For Development Teams: Top 10 Essential Skills
+
+These skills are specifically selected for teams building features, writing tests, and deploying infrastructure:
+
+### 🎯 **Feature Development**
+1. **`brainstorming`** - Design features before coding
+   ```
+   Use the brainstorming skill to help me design a user authentication system
+   ```
+
+2. **`test-driven-development`** - Write tests first (TDD workflow)
+   ```
+   Activate TDD skill and help me add payment processing with Stripe
+   ```
+
+3. **`code-review-excellence`** - Conduct thorough code reviews
+   ```
+   Activate code-review-excellence and review this PR for the new API endpoints
+   ```
+
+### 🔧 **API Development**
+4. **`api-design-principles`** - REST and GraphQL API design
+   ```
+   Use api-design-principles skill to design a REST API for our inventory system
+   ```
+
+5. **`api-security-testing`** - API vulnerability testing
+   ```
+   Activate api-security-testing and audit our authentication endpoints
+   ```
+
+### 🧪 **Testing & Quality**
+6. **`e2e-testing`** - End-to-end test workflows
+   ```
+   Use e2e-testing skill to create Playwright tests for our checkout flow
+   ```
+
+7. **`systematic-debugging`** - Debug methodically, not randomly
+   ```
+   Activate systematic-debugging and help me fix this race condition in our queue processor
+   ```
+
+### 🚀 **Infrastructure & Deployment**
+8. **`kubernetes-deployment`** - K8s best practices and Flux CD
+   ```
+   Use kubernetes-deployment skill to create a deployment manifest for our new microservice
+   ```
+
+9. **`gitops-workflow`** - GitOps and Flux patterns
+   ```
+   Activate gitops-workflow and help me set up Flux CD for our staging environment
+   ```
+
+10. **`ci-cd-automation`** - Pipeline automation workflows
+    ```
+    Use ci-cd-automation skill to create a GitHub Actions workflow for our API tests
+    ```
+
+### 📋 **Real-World Workflow Examples**
+
+**Building a new API feature:**
+```
+1. Use brainstorming skill to design the API
+2. Activate backend-architect agent + api-design-principles skill
+3. Use test-driven-development skill to implement with tests
+4. Activate code-review-excellence skill before merging
+5. Use kubernetes-deployment skill to create K8s manifests
+```
+
+**Debugging a production issue:**
+```
+Activate the senior-developer agent, then use systematic-debugging skill 
+to help me trace this timeout in our payment service
+```
+
+**Setting up new infrastructure:**
+```
+Use kubernetes-deployment and gitops-workflow skills to help me deploy 
+our new service with Flux CD
+```
+
+**Security audit before release:**
+```
+Activate security-engineer agent + api-security-testing skill to audit 
+our new authentication endpoints
+```
+
+### 💡 **Combining Agents + Skills**
+
+The real power comes from combining agent personas with skill methodologies:
+
+```
+Activate the backend-architect agent, then use the api-design-principles 
+and test-driven-development skills to help me build a new payment API 
+with comprehensive tests
+```
+
+This gives you:
+- **Agent expertise** (backend architecture knowledge)
+- **Skill methodologies** (API design + TDD workflows)
+- **Systematic approach** (following proven patterns)
+
+### 🔍 **Discover More Skills**
+
+```
+Search for skills about terraform        # Infrastructure as Code
+Search for skills about docker           # Containerization
+Search for skills about monitoring       # Observability
+Search for skills about graphql          # GraphQL APIs
+List skills in the devops category       # All DevOps skills
+```
+
 ---
 ## Adding Custom Agents
 Drop a Markdown file into \`./agents/\` in the project directory. The format is:
@@ -197,8 +356,17 @@ agency-agents-mcp/
 │   ├── engineering-security-engineer.md
 │   ├── design-ux-architect.md
 │   └── ... (160+ files)
+├── skills/                                   # 1,400+ specialized skills
+│   ├── brainstorming/
+│   │   └── SKILL.md
+│   ├── test-driven-development/
+│   │   └── SKILL.md
+│   ├── security-audit/
+│   │   └── SKILL.md
+│   └── ... (1,400+ skills)
 ├── shared-instructions/                      # Shared standards applied to ALL agents
 │   └── clean-code.md
+├── skills_index.json                         # Skills metadata index
 ├── build/
 │   └── azure-devops/
 │       ├── azure-pipelines.yml               # Pipeline template
@@ -245,8 +413,25 @@ When deployed as a Docker container:
 3. Images are pushed to Azure Container Registry (\`bluemountain.azurecr.io\`).
 4. The container can be deployed to any Docker-compatible environment.
 ---
+## Documentation
+
+### Quick References
+- **[Quick Reference](QUICK-REFERENCE.md)** ⭐ - **Start here!** One-page cheat sheet with top 10 skills, ready-to-use commands, and real-world workflows for development teams
+- **[Skills Guide](SKILLS-GUIDE.md)** - Comprehensive guide to all 1,400+ skills, categories, and best practices
+- **[Skills Integration Summary](SKILLS-INTEGRATION-COMPLETE.md)** - Technical implementation summary and integration details
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
+
+### Key Topics
+- **Agents** - See "Working with Agents" section above
+- **Skills** - See "For Development Teams: Top 10 Essential Skills" section above
+- **Installation** - See "Local Development (IDE Integration)" section above
+- **Docker** - See "Docker Deployment" section above
+- **Troubleshooting** - See "Troubleshooting" section below
+
+---
 ## Credits
 Agent personas sourced from [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents).
+Skills sourced from [sickn33/antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills).
 MCP server built on the [@modelcontextprotocol/sdk](https://www.npmjs.com/package/@modelcontextprotocol/sdk).
 ---
 ## Licence
