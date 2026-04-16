@@ -19,5 +19,5 @@ RUN mkdir -p /app/agents && \
 EXPOSE 3000
 ENV NODE_ENV=production
 
-CMD ["npm", "start"]
+CMD ["node", "http-wrapper.mjs"]
 

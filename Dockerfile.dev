@@ -17,10 +17,11 @@ RUN mkdir -p /app/agents && \
     mkdir -p /app/shared-instructions && \
     chmod -R 755 /app
 
-# Expose port for debugging
+# Expose port for HTTP API and debugging
 EXPOSE 3000
 EXPOSE 9229
 
-# Start with inspect mode for debugging
-CMD ["node", "--inspect=0.0.0.0:9229", "server.mjs"]
+# Start HTTP wrapper with inspect mode for debugging
+CMD ["node", "--inspect=0.0.0.0:9229", "http-wrapper.mjs"]
+
 
