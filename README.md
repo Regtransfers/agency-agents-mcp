@@ -81,7 +81,31 @@ chmod +x ~/.local/bin/mcp-http-bridge
 
 **2. Configure your IDE:**
 
-**Rider/IntelliJ (Linux/macOS):**
+**Rider 2025.3+ (New Config Location - Linux/macOS):**
+\`\`\`bash
+# Step 1: Create the wrapper script
+cat > ~/.local/bin/mcp-agency-agents << 'EOF'
+#!/bin/bash
+export MCP_URL="https://agency-agents-mcp.regtransfers.dev"
+exec /home/$USER/.local/bin/mcp-http-bridge "$@"
+EOF
+chmod +x ~/.local/bin/mcp-agency-agents
+
+# Step 2: Create the MCP config
+mkdir -p ~/.config/JetBrains/Rider2025.3
+cat > ~/.config/JetBrains/Rider2025.3/mcp_config.json << 'EOF'
+{
+  "mcpServers": {
+    "agency-agents": {
+      "command": "/home/$USER/.local/bin/mcp-agency-agents",
+      "args": []
+    }
+  }
+}
+EOF
+\`\`\`
+
+**Rider/IntelliJ (Older Versions - Linux/macOS):**
 \`\`\`bash
 mkdir -p ~/.config/github-copilot/intellij && cat > ~/.config/github-copilot/intellij/mcp.json << 'EOF'
 {
@@ -468,15 +492,18 @@ agency-agents-mcp/
 ├── azure-pipelines.yml                       # Main Azure pipeline
 └── node_modules/
 IDE Config Files:
-~/.config/github-copilot/intellij/mcp.json    # Rider/IntelliJ (Linux/macOS)
-~/.config/github-copilot/vscode/mcp.json      # VS Code (Linux/macOS)
-%APPDATA%\\github-copilot\\intellij\\mcp.json    # Rider/IntelliJ (Windows)
-%APPDATA%\\github-copilot\\vscode\\mcp.json      # VS Code (Windows)
+~/.config/JetBrains/Rider2025.3/mcp_config.json      # Rider 2025.3+ (Linux/macOS)
+~/.local/bin/mcp-agency-agents                       # Rider 2025.3+ wrapper script
+~/.config/github-copilot/intellij/mcp.json           # Rider/IntelliJ older (Linux/macOS)
+~/.config/github-copilot/vscode/mcp.json             # VS Code (Linux/macOS)
+%APPDATA%\\github-copilot\\intellij\\mcp.json           # Rider/IntelliJ (Windows)
+%APPDATA%\\github-copilot\\vscode\\mcp.json             # VS Code (Windows)
 \`\`\`
 ---
 ## Troubleshooting
 | Symptom | Fix |
 |---|---|
+| **Rider 2025.3 - Tools not loading** | Rider 2025.3 changed config location. Create wrapper script at `~/.local/bin/mcp-agency-agents` and config at `~/.config/JetBrains/Rider2025.3/mcp_config.json`. See "Rider 2025.3+" setup above. Check logs at `~/.cache/JetBrains/Rider2025.3/log/mcp/agency-agents.log` |
 | **MCP server doesn't start / tools not showing** | Open \`mcp.json\` and check that \`"command"\` is the **absolute path** to node (e.g. \`/usr/bin/node\`, not just \`node\`). IDEs don't inherit your shell PATH. Run \`which node\` to find it. |
 | Copilot doesn't show the agent tools | Restart the IDE. Verify \`mcp.json\` exists in the correct directory and uses absolute paths. |
 | Server crashes on startup | Run \`node server.mjs\` from the project directory manually to see the error. Usually a missing \`npm install\`. |

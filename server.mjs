@@ -1,3 +1,13 @@
+const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents");
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+#!/usr/bin/env node
+await server.connect(transport);
+
+  join(homedir(), ".github", "shared-instructions");
+const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents");
+// Agent catalogue — loaded once at startup from ~/.github/agents/
+import { join, basename } from "path";
+import { homedir } from "os";
 #!/usr/bin/env node
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -18,12 +28,6 @@ const __dirname = dirname(__filename);
 const AGENTS_DIR = process.env.AGENTS_DIR || join(__dirname, "agents");
 
 // ---------------------------------------------------------------------------
-// Skills catalogue — loaded once at startup from ./skills/
-// Override the directory with the SKILLS_DIR environment variable.
-// ---------------------------------------------------------------------------
-const SKILLS_DIR = process.env.SKILLS_DIR || join(__dirname, "skills");
-
-// ---------------------------------------------------------------------------
 // Shared instructions — loaded once at startup.
 // Every .md file in this directory is prepended to every agent activation so
 // that all personas share the same baseline standards (e.g. clean code rules).
@@ -35,9 +39,6 @@ const SHARED_INSTRUCTIONS_DIR =
 
 /** @type {Map<string, {slug: string, name: string, description: string, body: string}>} */
 const catalogue = new Map();
-
-/** @type {Map<string, {slug: string, name: string, description: string, body: string, category: string, risk: string}>} */
-const skillsCatalogue = new Map();
 
 /** @type {string} Combined text of all shared instruction files */
 let sharedInstructions = "";
@@ -88,60 +89,8 @@ function loadAgents() {
   }
 }
 
-function loadSkills() {
-  if (!existsSync(SKILLS_DIR)) return;
-
-  // Recursive function to scan directories for SKILL.md files
-  function scanDir(dir, parentPath = "") {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      
-      if (entry.isDirectory()) {
-        // Recursively scan subdirectories
-        scanDir(fullPath, join(parentPath, entry.name));
-      } else if (entry.name === "SKILL.md") {
-        // Found a skill file
-        const slug = parentPath || basename(dir);
-        const raw = readFileSync(fullPath, "utf-8");
-
-        // Parse YAML frontmatter
-        let name = slug;
-        let description = "";
-        let category = "uncategorized";
-        let risk = "unknown";
-        let body = raw;
-
-        const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-        if (fmMatch) {
-          const frontmatter = fmMatch[1];
-          body = fmMatch[2];
-
-          const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-          if (nameMatch) name = nameMatch[1].trim();
-
-          const descMatch = frontmatter.match(/^description:\s*["']?([^"'\n]+)["']?$/m);
-          if (descMatch) description = descMatch[1].trim();
-
-          const catMatch = frontmatter.match(/^category:\s*(.+)$/m);
-          if (catMatch) category = catMatch[1].trim();
-
-          const riskMatch = frontmatter.match(/^risk:\s*(.+)$/m);
-          if (riskMatch) risk = riskMatch[1].trim();
-        }
-
-        skillsCatalogue.set(slug, { slug, name, description, body, category, risk });
-      }
-    }
-  }
-
-  scanDir(SKILLS_DIR);
-}
-
 loadSharedInstructions();
 loadAgents();
-loadSkills();
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -379,207 +328,15 @@ server.tool(
   }
 );
 
-// Tool 6: list available skills with optional category filter
-server.tool(
-  "list_skills",
-  "List all available AI skills. Skills are specialized instruction sets for handling specific tasks. Optionally filter by category (e.g. ai-ml, backend, frontend, security, testing, automation, design, marketing).",
-  {
-    category: z
-      .string()
-      .optional()
-      .describe(
-        "Filter skills by category, e.g. 'ai-ml', 'backend', 'security', 'testing'"
-      ),
-  },
-  async ({ category }) => {
-    let skills = [...skillsCatalogue.values()];
-
-    if (category) {
-      const filterCat = category.toLowerCase();
-      skills = skills.filter((s) => s.category.toLowerCase() === filterCat);
-    }
-
-    if (skills.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: category
-              ? `No skills found in category "${category}". Use list_skills without a filter to see all.`
-              : "No skills installed.",
-          },
-        ],
-      };
-    }
-
-    const lines = skills.map(
-      (s) => `- **${s.name}** (\`${s.slug}\`): ${s.description || "(no description)"} [${s.category}]`
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `## Available Skills (${skills.length})\n\n${lines.join("\n")}`,
-        },
-      ],
-    };
-  }
-);
-
-// Tool 7: activate a skill
-server.tool(
-  "activate_skill",
-  "Activate an AI skill by name or slug. Returns the full skill instructions for you to follow. Use this when the user needs specialized expertise for a specific task (e.g. 'use brainstorming', 'activate TDD', 'help with security audit').",
-  {
-    query: z
-      .string()
-      .describe(
-        "The skill name or slug to activate, e.g. 'brainstorming', 'test-driven-development', 'security-audit'"
-      ),
-  },
-  async ({ query }) => {
-    const normalised = query.toLowerCase().replace(/\s+/g, "-");
-
-    // Try exact slug match first
-    let skill = skillsCatalogue.get(normalised);
-
-    // Fuzzy: find any skill whose slug or name contains the query
-    if (!skill) {
-      const candidates = [...skillsCatalogue.values()].filter(
-        (s) =>
-          s.slug.includes(normalised) ||
-          s.name.toLowerCase().includes(normalised.replace(/-/g, " "))
-      );
-      if (candidates.length === 1) {
-        skill = candidates[0];
-      } else if (candidates.length > 1) {
-        const list = candidates
-          .slice(0, 10)
-          .map((s) => `- ${s.name} (\`${s.slug}\`) [${s.category}]`)
-          .join("\n");
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Multiple skills match "${query}". Please be more specific:\n\n${list}`,
-            },
-          ],
-        };
-      }
-    }
-
-    if (!skill) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No skill found matching "${query}". Use the list_skills tool to see what's available.`,
-          },
-        ],
-      };
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `# Activating Skill: ${skill.name}\n\nYou are now adopting the following skill instructions. Follow them for this task.\n\n**Category:** ${skill.category}\n**Risk Level:** ${skill.risk}\n\n---\n\n${skill.body}`,
-        },
-      ],
-    };
-  }
-);
-
-// Tool 8: search skills by keyword
-server.tool(
-  "search_skills",
-  "Search skills by keyword. Searches skill names, descriptions, and content.",
-  {
-    keyword: z.string().describe("Keyword to search for across all skills"),
-    limit: z
-      .number()
-      .optional()
-      .default(10)
-      .describe("Maximum number of results to return (default 10)"),
-  },
-  async ({ keyword, limit }) => {
-    const term = keyword.toLowerCase();
-    const matches = [...skillsCatalogue.values()]
-      .filter(
-        (s) =>
-          s.slug.includes(term) ||
-          s.name.toLowerCase().includes(term) ||
-          s.description.toLowerCase().includes(term) ||
-          s.body.toLowerCase().includes(term)
-      )
-      .slice(0, limit || 10);
-
-    if (matches.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No skills found matching "${keyword}".`,
-          },
-        ],
-      };
-    }
-
-    const lines = matches.map(
-      (s) => `- **${s.name}** (\`${s.slug}\`): ${s.description || "(no description)"} [${s.category}]`
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `## Search Results for "${keyword}" (${matches.length} match${matches.length === 1 ? "" : "es"})\n\n${lines.join("\n")}`,
-        },
-      ],
-    };
-  }
-);
-
-// Tool 9: get skill categories
-server.tool(
-  "get_skill_categories",
-  "Get a list of all skill categories with counts. Useful for discovering what types of skills are available.",
-  {},
-  async () => {
-    const categoryCounts = new Map();
-    
-    for (const skill of skillsCatalogue.values()) {
-      const count = categoryCounts.get(skill.category) || 0;
-      categoryCounts.set(skill.category, count + 1);
-    }
-
-    const sorted = [...categoryCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([cat, count]) => `- **${cat}**: ${count} skill${count === 1 ? "" : "s"}`)
-      .join("\n");
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `## Skill Categories (${categoryCounts.size})\n\n${sorted}`,
-        },
-      ],
-    };
-  }
-);
-
-// Tool 10: health check endpoint for Kubernetes probes
+// Tool 5: health check endpoint for Kubernetes probes
 server.tool(
   "healthz",
   "Health check endpoint for Kubernetes liveness/readiness probes. Returns server status and agent catalogue information.",
   {},
   async () => {
     const agentCount = catalogue.size;
-    const skillCount = skillsCatalogue.size;
     const hasSharedInstructions = sharedInstructions.length > 0;
-    const isHealthy = agentCount > 0 || skillCount > 0;
+    const isHealthy = agentCount > 0;
     
     const status = {
       status: isHealthy ? "healthy" : "unhealthy",
@@ -587,10 +344,6 @@ server.tool(
       agents: {
         total: agentCount,
         directory: AGENTS_DIR,
-      },
-      skills: {
-        total: skillCount,
-        directory: SKILLS_DIR,
       },
       sharedInstructions: {
         loaded: hasSharedInstructions,
