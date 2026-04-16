@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Docker: Debug MCP Server",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "address": "localhost",
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "protocol": "inspector",
+      "restart": true,
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "preLaunchTask": "docker-debug-up"
+    },
+    {
+      "name": "Local: Debug MCP Server",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/server.mjs",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "console": "integratedTerminal",
+      "env": {
+        "AGENTS_DIR": "${workspaceFolder}/agents",
+        "SHARED_INSTRUCTIONS_DIR": "${workspaceFolder}/shared-instructions"
+      }
+    },
+    {
+      "name": "Docker: Attach to Running Container",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "address": "localhost",
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "protocol": "inspector",
+      "restart": false,
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
+    }
+  ]
+}
+

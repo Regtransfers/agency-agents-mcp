@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "docker-debug-up",
+      "type": "shell",
+      "command": "docker-compose -f docker-compose.debug.yml up -d",
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "pattern": [
+            {
+              "regexp": ".",
+              "file": 1,
+              "location": 2,
+              "message": 3
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": ".",
+            "endsPattern": "."
+          }
+        }
+      ]
+    },
+    {
+      "label": "docker-debug-down",
+      "type": "shell",
+      "command": "docker-compose -f docker-compose.debug.yml down"
+    },
+    {
+      "label": "docker-debug-logs",
+      "type": "shell",
+      "command": "docker-compose -f docker-compose.debug.yml logs -f"
+    },
+    {
+      "label": "docker-build-test",
+      "type": "shell",
+      "command": "docker build -t agency-agents-mcp:test .",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "docker-build-dev",
+      "type": "shell",
+      "command": "docker build -f Dockerfile.dev -t agency-agents-mcp:debug .",
+      "group": "build"
+    }
+  ]
+}
+

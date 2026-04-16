@@ -1,0 +1,40 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+  - main
+  - master
+
+# Set build number with zero-padded revision (fixes .1 vs .10 issue)
+name: $(Date:yyyyMMdd).$(Rev:rr)
+
+resources:
+  - repo: self
+
+variables:
+  dockerRegistryServiceConnection: '5a653e15-c072-4698-b95d-ad5bf4f5775d'
+  imageRepository: 'agency-agents-mcp'
+  containerRegistry: 'bluemountain.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildNumber)'
+
+stages:
+  - stage: Build
+    displayName: Build and push stage
+    jobs:
+      - job: Build
+        displayName: Build
+        pool:
+          name: BlueMountain-PROD
+        steps:
+          - task: Docker@2
+            displayName: Build and push an image to container registry
+            inputs:
+              command: buildAndPush
+              repository: $(imageRepository)
+              dockerfile: $(dockerfilePath)
+              containerRegistry: $(dockerRegistryServiceConnection)
+              tags: |
+                $(tag)-alpha
+

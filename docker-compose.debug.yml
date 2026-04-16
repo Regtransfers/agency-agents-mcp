@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  agency-agents-mcp-debug:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: agency-agents-mcp:debug
+    container_name: agency-agents-mcp-debug
+    environment:
+      - NODE_ENV=development
+      - TZ=Europe/London
+    ports:
+      - "9229:9229"  # Node.js debugger port
+      - "3000:3000"  # Application port (if needed)
+    stdin_open: true
+    tty: true
+    # Note: For true hot-reload, uncomment the volumes below
+    # However, this requires the container to have the files already
+    # volumes:
+    #   - ./server.mjs:/app/server.mjs:ro
+    #   - ./agents:/app/agents:ro
+    #   - ./shared-instructions:/app/shared-instructions:ro
+
+
+

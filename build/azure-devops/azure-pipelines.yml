@@ -1,0 +1,28 @@
+name: $(Date:yyyyMMdd).$(Rev:rr)
+
+variables:
+  azureSubscriptionEndpoint: 'Azure XG subscription (7e62529f-0b2e-4b91-b925-9b5529f40b18)'
+  azureContainerRegistry: 'bluemountain.azurecr.io'
+  
+trigger:
+  branches:
+    include:
+    - master
+    - main
+  paths:
+    include:
+    - agents/**
+    - shared-instructions/**
+    - server.mjs
+    - package.json
+    - Dockerfile
+    - build/azure-devops/**
+
+jobs:
+- template: buildimages.yaml
+  parameters:
+    services: agency-agents-mcp
+    repository: agency-agents-mcp
+    azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
+    azureContainerRegistry: $(azureContainerRegistry)
+

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  agency-agents-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bluemountain.azurecr.io/agency-agents-mcp:${TAG:-latest}
+    container_name: agency-agents-mcp
+    environment:
+      - NODE_ENV=production
+      - TZ=Europe/London
+    volumes:
+      - ./agents:/app/agents:ro
+      - ./shared-instructions:/app/shared-instructions:ro
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+

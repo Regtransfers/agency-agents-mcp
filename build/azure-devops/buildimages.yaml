@@ -1,0 +1,35 @@
+parameters:
+  services: ''
+  registryEndpoint: ''
+  azureContainerRegistry: ''
+  azureSubscriptionEndpoint: ''
+
+jobs:
+- job: BuildContainersForPR_Linux
+  condition: eq('${{ variables['Build.Reason'] }}', 'PullRequest')
+  pool:
+    name: BlueMountain-PROD
+  steps:
+  - bash: docker build -t ${{ parameters.services }}:pr-${{ variables['Build.SourceBranchName'] }} .
+    displayName: Docker build ${{ parameters.services }}
+
+- job: BuildLinux
+  condition: ne('${{ variables['Build.Reason'] }}', 'PullRequest')
+  pool:
+    name: BlueMountain-PROD
+  steps:
+  
+  - task: Docker@2
+    displayName: Build and push ${{ parameters.services }}
+    inputs:
+      command: buildAndPush
+      repository: ${{ parameters.services }}
+      dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+      containerRegistry: ${{ parameters.azureSubscriptionEndpoint }}
+      tags: |
+        $(Build.BuildNumber)-alpha
+        latest
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
+

@@ -4,14 +4,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { readFileSync, readdirSync, existsSync } from "fs";
-import { join, basename } from "path";
-import { homedir } from "os";
+import { join, basename, dirname } from "path";
+import { fileURLToPath } from "url";
+
+// Get the directory of the current module (ES module __dirname equivalent)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // ---------------------------------------------------------------------------
-// Agent catalogue — loaded once at startup from ~/.github/agents/
+// Agent catalogue — loaded once at startup from ./agents/
 // Override the directory with the AGENTS_DIR environment variable.
 // ---------------------------------------------------------------------------
-const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents");
+const AGENTS_DIR = process.env.AGENTS_DIR || join(__dirname, "agents");
 
 // ---------------------------------------------------------------------------
 // Shared instructions — loaded once at startup.
@@ -21,7 +25,7 @@ const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents"
 // ---------------------------------------------------------------------------
 const SHARED_INSTRUCTIONS_DIR =
   process.env.SHARED_INSTRUCTIONS_DIR ||
-  join(homedir(), ".github", "shared-instructions");
+  join(__dirname, "shared-instructions");
 
 /** @type {Map<string, {slug: string, name: string, description: string, body: string}>} */
 const catalogue = new Map();
@@ -308,6 +312,40 @@ server.tool(
         {
           type: "text",
           text: `## Shared Instructions (${fileCount} file${fileCount === 1 ? "" : "s"})\n\nThese are automatically prepended to every agent activation:\n\n---\n\n${sharedInstructions}`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 5: health check endpoint for Kubernetes probes
+server.tool(
+  "healthz",
+  "Health check endpoint for Kubernetes liveness/readiness probes. Returns server status and agent catalogue information.",
+  {},
+  async () => {
+    const agentCount = catalogue.size;
+    const hasSharedInstructions = sharedInstructions.length > 0;
+    const isHealthy = agentCount > 0;
+    
+    const status = {
+      status: isHealthy ? "healthy" : "unhealthy",
+      timestamp: new Date().toISOString(),
+      agents: {
+        total: agentCount,
+        directory: AGENTS_DIR,
+      },
+      sharedInstructions: {
+        loaded: hasSharedInstructions,
+        directory: SHARED_INSTRUCTIONS_DIR,
+      },
+    };
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(status, null, 2),
         },
       ],
     };

@@ -1,154 +1,112 @@
 # Agency Agents MCP Server
-
 An MCP (Model Context Protocol) server that gives GitHub Copilot access to 160+ specialist AI agent personas. Once installed, you can ask Copilot to "be a backend architect" or "activate the security engineer" and it will adopt that specialist's full personality, expertise, and methodology for the rest of the conversation.
-
 Works with **JetBrains Rider**, **IntelliJ**, and **VS Code** on **Linux**, **macOS**, and **Windows**.
-
+Deployable as a **Docker container** with Azure DevOps pipeline support.
 ---
-
 ## What You Get
-
-Four tools are exposed to Copilot's agent mode:
-
+Five tools are exposed to Copilot's agent mode:
 | Tool | What it does |
 |---|---|
 | `list_agents` | List all installed personas, optionally filtered by category |
 | `activate_agent` | Load a persona so the AI adopts that specialist role |
 | `search_agents` | Full-text search across agent names, descriptions, and content |
 | `get_shared_instructions` | View the shared instructions (e.g. clean code standards) applied to every agent |
-
+| `healthz` | RPC-based health check endpoint for Kubernetes probes (see [HEALTHZ-RPC.md](HEALTHZ-RPC.md)) |
 Agent categories include: `engineering`, `design`, `marketing`, `testing`, `sales`, `product`, `academic`, `support`, `game-development`, `specialized`, `project-management`, `paid-media`, `spatial-computing`, and more.
-
 ---
-
 ## Prerequisites
-
+### Local Development
 - **Node.js >= 18** (check with `node -v`)
 - **npm** (ships with Node)
 - **git**
 - **GitHub Copilot** plugin installed in your IDE with an active subscription
-
+### Docker Deployment
+- **Docker** (check with `docker -v`)
+- **Docker Compose** (optional, for local development)
 ---
-
-## Quick Install
-
-### Linux / macOS
-
-```bash
+## Docker Deployment (Recommended for Production)
+### Quick Start with Docker
+\`\`\`bash
 git clone https://github.com/Regtransfers/agency-agents-mcp.git
 cd agency-agents-mcp
-chmod +x install.sh
-./install.sh
-```
-
-### Windows (PowerShell)
-
-```powershell
+docker build -t agency-agents-mcp:latest .
+docker run -it agency-agents-mcp:latest
+\`\`\`
+### Using Docker Compose
+\`\`\`bash
 git clone https://github.com/Regtransfers/agency-agents-mcp.git
 cd agency-agents-mcp
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\install.ps1
-```
-
-The script will:
-
-1. Check that Node >= 18, npm, and git are available.
-2. Clone the [agency-agents](https://github.com/msitarzewski/agency-agents) persona definitions into `~/.github/agents/`.
-3. Install shared instructions (clean code standards, etc.) into `~/.github/shared-instructions/`.
-4. Copy the MCP server into `~/.github/mcp-servers/agency-agents/` and run `npm install`.
-5. Ask which IDE you use and write the Copilot MCP config (`mcp.json`) for that IDE.
-6. Tell you to restart the IDE.
-
-After the script finishes, **restart your IDE** and open Copilot Chat.
-
+docker-compose up --build
+\`\`\`
+### Azure Container Registry Deployment
+The project includes Azure DevOps pipelines that automatically build and push Docker images to Azure Container Registry on every commit to \`main\`:
+- **Pipeline**: \`azure-pipelines.yml\`
+- **Container Registry**: \`bluemountain.azurecr.io\`
+- **Image Name**: \`agency-agents-mcp\`
+The pipeline is configured to run on the \`BlueMountain-PROD\` agent pool.
 ---
-
-## Manual Install
-
-If you prefer to do it step by step:
-
-### 1. Download agent definitions
-
-```bash
-mkdir -p ~/.github/agents
-git clone --depth 1 https://github.com/msitarzewski/agency-agents.git /tmp/agency-agents
-cp /tmp/agency-agents/agents/*.md ~/.github/agents/
-rm -rf /tmp/agency-agents
-```
-
-### 2. Install the MCP server
-
-```bash
-mkdir -p ~/.github/mcp-servers/agency-agents
-cp server.mjs package.json ~/.github/mcp-servers/agency-agents/
-cd ~/.github/mcp-servers/agency-agents
+## Local Development (IDE Integration)
+### 1. Clone the repository
+\`\`\`bash
+git clone https://github.com/Regtransfers/agency-agents-mcp.git
+cd agency-agents-mcp
+\`\`\`
+The repository includes:
+- 160+ agent personas in \`./agents/\`
+- Shared instructions (clean code standards) in \`./shared-instructions/\`
+- The MCP server (\`server.mjs\`) configured to use local folders
+### 2. Install dependencies
+\`\`\`bash
 npm install --production
-```
-
+\`\`\`
 ### 3. Verify it starts
-
-```bash
-node ~/.github/mcp-servers/agency-agents/server.mjs
+\`\`\`bash
+node server.mjs
 # Should hang (waiting for stdin). Ctrl+C to stop.
-```
-
+\`\`\`
 ### 4. Register with your IDE
-
-The config file must use **fully resolved absolute paths** — it does not expand `~`, `$HOME`, or `%USERPROFILE%`.
-
-> **Important:** Use the absolute path to `node`, not just `node`. IDEs do not inherit your shell's PATH, so a bare `node` command will silently fail — especially if node was installed via nvm, fnm, Homebrew, etc.
+The config file must use **fully resolved absolute paths** — it does not expand \`~\`, \`$HOME\`, or \`%USERPROFILE%\`.
+> **Important:** Use the absolute path to \`node\`, not just \`node\`. IDEs do not inherit your shell's PATH, so a bare \`node\` command will silently fail — especially if node was installed via nvm, fnm, Homebrew, etc.
 >
-> Find yours with: `which node` (Linux/macOS) or `(Get-Command node).Source` (PowerShell).
-
-Run the appropriate one-liner below to generate the file with the correct paths for your machine:
-
+> Find yours with: \`which node\` (Linux/macOS) or \`(Get-Command node).Source\` (PowerShell).
+Run these commands from the project directory. They will automatically detect your node path and project path.
 **JetBrains Rider / IntelliJ (Linux / macOS):**
-
-```bash
-NODE_BIN="$(readlink -f "$(which node)" 2>/dev/null || which node)" && \
+\`\`\`bash
+NODE_BIN="\$(readlink -f "\$(which node)" 2>/dev/null || which node)" && \\
+PROJECT_PATH="\$(pwd)" && \\
 mkdir -p ~/.config/github-copilot/intellij && cat > ~/.config/github-copilot/intellij/mcp.json << EOF
 {
     "servers": {
         "agency-agents": {
             "type": "stdio",
-            "command": "$NODE_BIN",
-            "args": ["$HOME/.github/mcp-servers/agency-agents/server.mjs"],
-            "env": {
-                "AGENTS_DIR": "$HOME/.github/agents",
-                "SHARED_INSTRUCTIONS_DIR": "$HOME/.github/shared-instructions"
-            }
+            "command": "\$NODE_BIN",
+            "args": ["\$PROJECT_PATH/server.mjs"]
         }
     }
 }
 EOF
-```
-
+\`\`\`
 **VS Code (Linux / macOS):**
-
-```bash
-NODE_BIN="$(readlink -f "$(which node)" 2>/dev/null || which node)" && \
+\`\`\`bash
+NODE_BIN="\$(readlink -f "\$(which node)" 2>/dev/null || which node)" && \\
+PROJECT_PATH="\$(pwd)" && \\
 mkdir -p ~/.config/github-copilot/vscode && cat > ~/.config/github-copilot/vscode/mcp.json << EOF
 {
     "servers": {
         "agency-agents": {
             "type": "stdio",
-            "command": "$NODE_BIN",
-            "args": ["$HOME/.github/mcp-servers/agency-agents/server.mjs"],
-            "env": {
-                "AGENTS_DIR": "$HOME/.github/agents",
-                "SHARED_INSTRUCTIONS_DIR": "$HOME/.github/shared-instructions"
-            }
+            "command": "\$NODE_BIN",
+            "args": ["\$PROJECT_PATH/server.mjs"]
         }
     }
 }
 EOF
-```
-
+\`\`\`
 **Windows (PowerShell):**
-
-```powershell
-$nodeBin = ((Get-Command node).Source -replace '\\','/')
-$dir = "$env:APPDATA\github-copilot\intellij"   # change 'intellij' to 'vscode' for VS Code
+\`\`\`powershell
+$nodeBin = ((Get-Command node).Source -replace '\\\\','/')
+$projectPath = (Get-Location).Path -replace '\\\\','/'
+$dir = "$env:APPDATA\\github-copilot\\intellij"   # change 'intellij' to 'vscode' for VS Code
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 @"
 {
@@ -156,165 +114,84 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
         "agency-agents": {
             "type": "stdio",
             "command": "$nodeBin",
-            "args": ["$($env:USERPROFILE -replace '\\','/')/.github/mcp-servers/agency-agents/server.mjs"],
-            "env": {
-                "AGENTS_DIR": "$($env:USERPROFILE -replace '\\','/')/.github/agents",
-                "SHARED_INSTRUCTIONS_DIR": "$($env:USERPROFILE -replace '\\','/')/.github/shared-instructions"
-            }
+            "args": ["$projectPath/server.mjs"]
         }
     }
 }
-"@ | Set-Content "$dir\mcp.json"
-```
-
-After running, verify the file contains your real home directory (e.g. `/home/daniel/...`) and the absolute path to node (e.g. `/usr/bin/node`), not placeholders.
-
+"@ | Set-Content "$dir\\mcp.json"
+\`\`\`
+The server automatically uses the \`./agents/\` and \`./shared-instructions/\` folders from the project directory. You can override with environment variables \`AGENTS_DIR\` and \`SHARED_INSTRUCTIONS_DIR\` if needed.
 ### 5. Restart the IDE
-
-Close and reopen your IDE. The Copilot plugin reads `mcp.json` at startup and launches the server automatically.
-
+Close and reopen your IDE. The Copilot plugin reads \`mcp.json\` at startup and launches the server automatically.
 ---
-
 ## Usage
-
 Open Copilot Chat in **agent mode** and try:
-
-```
+\`\`\`
 List available agents
-```
-
-```
+\`\`\`
+\`\`\`
 Activate the backend architect agent and review my API design
-```
-
-```
+\`\`\`
+\`\`\`
 Search for agents about security
-```
-
-```
+\`\`\`
+\`\`\`
 List engineering agents
-```
-
+\`\`\`
 When you activate an agent, the AI adopts that persona for the rest of the conversation. Start a new chat to reset.
-
 ---
-
 ## Adding Custom Agents
-
-Drop a Markdown file into `~/.github/agents/`. The format is:
-
-```markdown
+Drop a Markdown file into \`./agents/\` in the project directory. The format is:
+\`\`\`markdown
 ---
 name: My Custom Agent
 description: One-line summary of what this agent does
 ---
-
 # My Custom Agent
-
 You are **My Custom Agent**. You specialise in...
-
 (full instructions and personality here)
-```
-
-Only `name` and `description` from the frontmatter are used by the server. Everything below the frontmatter is the persona body that gets sent to the AI.
-
-Restart the IDE after adding new agents.
-
+\`\`\`
+Only \`name\` and \`description\` from the frontmatter are used by the server. Everything below the frontmatter is the persona body that gets sent to the AI.
+Restart the IDE or rebuild the Docker image after adding new agents.
 ---
-
 ## Shared Instructions (Clean Code & More)
-
 The server supports **shared instructions** — Markdown files that are automatically prepended to every agent activation. This is how you enforce baseline standards (clean code, security guidelines, project conventions, etc.) across all 160+ agent personas.
-
-A default `clean-code.md` is included and installed automatically. It covers naming, SOLID, DRY/KISS/YAGNI, testing, error handling, and more.
-
+A default \`clean-code.md\` is included in \`./shared-instructions/\`. It covers naming, SOLID, DRY/KISS/YAGNI, testing, error handling, and more.
 ### Where they live
-
-| Platform | Directory |
-|---|---|
-| Linux / macOS | `~/.github/shared-instructions/` |
-| Windows | `%USERPROFILE%\.github\shared-instructions\` |
-
+Instructions are stored in \`./shared-instructions/\` in the project directory.
 ### Customising
-
-- **Edit** the existing `clean-code.md` to match your team's standards.
-- **Add** more `.md` files (e.g. `project-conventions.md`, `security-policy.md`) — all files are loaded and concatenated alphabetically.
+- **Edit** \`./shared-instructions/clean-code.md\` to match your team's standards.
+- **Add** more \`.md\` files (e.g. \`project-conventions.md\`, \`security-policy.md\`) — all files are loaded and concatenated alphabetically.
 - **Remove** any file you don't want.
-- Restart the IDE after changes.
-
+- Restart the IDE or rebuild the Docker image after changes.
 ### Viewing in chat
-
 Ask Copilot:
-
-```
+\`\`\`
 Show me the shared instructions
-```
-
-This calls the `get_shared_instructions` tool and shows exactly what baseline rules are being applied.
-
+\`\`\`
+This calls the \`get_shared_instructions\` tool and shows exactly what baseline rules are being applied.
 ---
-
 ## Updating Agents
-
-To pull the latest personas from the upstream repo:
-
-```bash
-git clone --depth 1 https://github.com/msitarzewski/agency-agents.git /tmp/agency-agents
-cp /tmp/agency-agents/agents/*.md ~/.github/agents/
-rm -rf /tmp/agency-agents
-```
-
-Then restart the IDE.
-
+Agents are included in the repository. To get the latest:
+\`\`\`bash
+git pull origin main
+\`\`\`
+Then restart the IDE or rebuild the Docker image.
 ---
-
 ## Uninstall
-
-### Linux / macOS
-
-```bash
-chmod +x uninstall.sh
-./uninstall.sh
-```
-
-### Windows (PowerShell)
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\uninstall.ps1
-```
-
-Or manually:
-
-**Linux / macOS:**
-
-```bash
-rm -rf ~/.github/agents
-rm -rf ~/.github/shared-instructions
-rm -rf ~/.github/mcp-servers/agency-agents
-# Then remove the "agency-agents" block from your mcp.json
-```
-
-**Windows (PowerShell):**
-
-```powershell
-Remove-Item "$env:USERPROFILE\.github\agents" -Recurse -Force
-Remove-Item "$env:USERPROFILE\.github\shared-instructions" -Recurse -Force
-Remove-Item "$env:USERPROFILE\.github\mcp-servers\agency-agents" -Recurse -Force
-# Then remove the "agency-agents" block from your mcp.json
-```
-
-Restart the IDE after uninstalling.
-
+To remove the IDE integration, simply delete the \`"agency-agents"\` block from your \`mcp.json\` file and restart the IDE.
+For Docker deployments, stop and remove the container:
+\`\`\`bash
+docker stop agency-agents-mcp
+docker rm agency-agents-mcp
+# Optional: remove the image
+docker rmi agency-agents-mcp:latest
+\`\`\`
 ---
-
-## Directory Layout After Install
-
-**Linux / macOS:**
-
-```
-~/.github/
-├── agents/                                   # Agent persona .md files
+## Directory Layout
+\`\`\`
+agency-agents-mcp/
+├── agents/                                   # 160+ agent persona .md files
 │   ├── engineering-backend-architect.md
 │   ├── engineering-code-reviewer.md
 │   ├── engineering-security-engineer.md
@@ -322,81 +199,56 @@ Restart the IDE after uninstalling.
 │   └── ... (160+ files)
 ├── shared-instructions/                      # Shared standards applied to ALL agents
 │   └── clean-code.md
-└── mcp-servers/
-    └── agency-agents/
-        ├── server.mjs                        # MCP server
-        ├── package.json
-        ├── package-lock.json
-        └── node_modules/
-
-~/.config/github-copilot/
-├── intellij/
-│   └── mcp.json                              # Rider/IntelliJ config
-└── vscode/
-    └── mcp.json                              # VS Code config
-```
-
-**Windows:**
-
-```
-%USERPROFILE%\.github\
-├── agents\                                   # Agent persona .md files
-│   └── ... (160+ files)
-├── shared-instructions\                      # Shared standards applied to ALL agents
-│   └── clean-code.md
-└── mcp-servers\
-    └── agency-agents\
-        ├── server.mjs
-        ├── package.json
-        ├── package-lock.json
-        └── node_modules\
-
-%APPDATA%\github-copilot\
-├── intellij\
-│   └── mcp.json                              # Rider/IntelliJ config
-└── vscode\
-    └── mcp.json                              # VS Code config
-```
-
+├── build/
+│   └── azure-devops/
+│       ├── azure-pipelines.yml               # Pipeline template
+│       └── buildimages.yaml                  # Build job definitions
+├── server.mjs                                # MCP server
+├── package.json
+├── package-lock.json
+├── Dockerfile                                # Docker image definition
+├── docker-compose.yml                        # Docker Compose config
+├── .dockerignore                             # Docker build exclusions
+├── azure-pipelines.yml                       # Main Azure pipeline
+└── node_modules/
+IDE Config Files:
+~/.config/github-copilot/intellij/mcp.json    # Rider/IntelliJ (Linux/macOS)
+~/.config/github-copilot/vscode/mcp.json      # VS Code (Linux/macOS)
+%APPDATA%\\github-copilot\\intellij\\mcp.json    # Rider/IntelliJ (Windows)
+%APPDATA%\\github-copilot\\vscode\\mcp.json      # VS Code (Windows)
+\`\`\`
 ---
-
 ## Troubleshooting
-
 | Symptom | Fix |
 |---|---|
-| **MCP server doesn't start / tools not showing** | Open `mcp.json` and check that `"command"` is the **absolute path** to node (e.g. `/usr/bin/node`, not just `node`). IDEs don't inherit your shell PATH. Run `which node` to find it. |
-| Copilot doesn't show the agent tools | Restart the IDE. Verify `mcp.json` exists in the correct directory and uses absolute paths. |
-| Server crashes on startup | Run `node ~/.github/mcp-servers/agency-agents/server.mjs` manually to see the error. Usually a missing `npm install`. |
-| "No agents installed" response | Check `~/.github/agents/` has `.md` files. Check `AGENTS_DIR` in `mcp.json`. |
-| `node: command not found` | Ensure Node >= 18 is installed and on your `PATH`. Use the absolute path in `mcp.json`. |
-| Works in VS Code but not Rider (or vice versa) | Each IDE has its own `mcp.json` path. Make sure you created the config in the right directory. |
-| Already have other MCP servers in `mcp.json` | Merge the `agency-agents` block into your existing `servers` object rather than replacing the file. |
-
+| **MCP server doesn't start / tools not showing** | Open \`mcp.json\` and check that \`"command"\` is the **absolute path** to node (e.g. \`/usr/bin/node\`, not just \`node\`). IDEs don't inherit your shell PATH. Run \`which node\` to find it. |
+| Copilot doesn't show the agent tools | Restart the IDE. Verify \`mcp.json\` exists in the correct directory and uses absolute paths. |
+| Server crashes on startup | Run \`node server.mjs\` from the project directory manually to see the error. Usually a missing \`npm install\`. |
+| "No agents installed" response | Check \`./agents/\` has \`.md\` files. Verify you're running from the correct directory. |
+| \`node: command not found\` | Ensure Node >= 18 is installed and on your \`PATH\`. Use the absolute path in \`mcp.json\`. |
+| Works in VS Code but not Rider (or vice versa) | Each IDE has its own \`mcp.json\` path. Make sure you created the config in the right directory. |
+| Already have other MCP servers in \`mcp.json\` | Merge the \`"agency-agents"\` block into your existing \`servers\` object rather than replacing the file. |
+| Docker build fails | Ensure Docker is installed and running. Check that all files are present in the build context. |
+| Pipeline fails in Azure DevOps | Verify the agent pool name (\`BlueMountain-PROD\`) and service connection ID match your Azure setup. |
 ---
-
 ## How It Works
-
-1. The Copilot plugin reads `mcp.json` at startup and spawns `node server.mjs` as a child process.
+1. The Copilot plugin reads \`mcp.json\` at startup and spawns \`node server.mjs\` as a child process.
 2. The server communicates with Copilot over **stdin/stdout** using the Model Context Protocol.
 3. When you ask Copilot to list or activate an agent, it calls the MCP tool.
-4. The server reads the matching `.md` file from `~/.github/agents/` and returns the persona text, **prepended with any shared instructions** from `~/.github/shared-instructions/`.
+4. The server reads the matching \`.md\` file from \`./agents/\` and returns the persona text, **prepended with any shared instructions** from \`./shared-instructions/\`.
 5. Copilot adopts those instructions (shared standards + agent persona) for the remainder of the conversation.
-
 The server is stateless. It reads all agent files once at startup and serves them from memory. No network calls, no external dependencies at runtime.
-
+### Docker Deployment
+When deployed as a Docker container:
+1. The Dockerfile packages the entire application including all agent definitions.
+2. The Azure DevOps pipeline automatically builds and tags images on every commit.
+3. Images are pushed to Azure Container Registry (\`bluemountain.azurecr.io\`).
+4. The container can be deployed to any Docker-compatible environment.
 ---
-
 ## Credits
-
 Agent personas sourced from [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents).
-
 MCP server built on the [@modelcontextprotocol/sdk](https://www.npmjs.com/package/@modelcontextprotocol/sdk).
-
 ---
-
 ## Licence
-
 MIT
-
-
 
