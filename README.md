@@ -65,7 +65,93 @@ The project includes Azure DevOps pipelines that automatically build and push Do
 - **Image Name**: \`agency-agents-mcp\`
 The pipeline is configured to run on the \`BlueMountain-PROD\` agent pool.
 ---
-## Local Development (IDE Integration)
+## Quick Setup (Connect to Hosted Server)
+
+**No installation required!** Connect your IDE directly to the hosted MCP server.
+
+### One-Time Setup
+
+**1. Download the bridge script:**
+\`\`\`bash
+# Linux/macOS - save to ~/.local/bin
+mkdir -p ~/.local/bin
+curl -o ~/.local/bin/mcp-http-bridge https://raw.githubusercontent.com/Regtransfers/agency-agents-mcp/main/mcp-http-bridge.mjs
+chmod +x ~/.local/bin/mcp-http-bridge
+\`\`\`
+
+**2. Configure your IDE:**
+
+**Rider/IntelliJ (Linux/macOS):**
+\`\`\`bash
+mkdir -p ~/.config/github-copilot/intellij && cat > ~/.config/github-copilot/intellij/mcp.json << 'EOF'
+{
+    "servers": {
+        "agency-agents": {
+            "type": "stdio",
+            "command": "/home/$USER/.local/bin/mcp-http-bridge",
+            "env": {
+                "MCP_URL": "https://agency-agents-mcp.regtransfers.dev"
+            }
+        }
+    }
+}
+EOF
+\`\`\`
+
+**VS Code (Linux/macOS):**
+\`\`\`bash
+mkdir -p ~/.config/github-copilot/vscode && cat > ~/.config/github-copilot/vscode/mcp.json << 'EOF'
+{
+    "servers": {
+        "agency-agents": {
+            "type": "stdio",
+            "command": "/home/$USER/.local/bin/mcp-http-bridge",
+            "env": {
+                "MCP_URL": "https://agency-agents-mcp.regtransfers.dev"
+            }
+        }
+    }
+}
+EOF
+\`\`\`
+
+**Windows (PowerShell):**
+\`\`\`powershell
+# Download bridge
+$bridgeDir = "$env:LOCALAPPDATA\mcp-bridge"
+New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Regtransfers/agency-agents-mcp/main/mcp-http-bridge.mjs" -OutFile "$bridgeDir\mcp-http-bridge.mjs"
+
+# Configure Rider
+$configDir = "$env:APPDATA\github-copilot\intellij"  # or 'vscode' for VS Code
+New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+@"
+{
+    "servers": {
+        "agency-agents": {
+            "type": "stdio",
+            "command": "node",
+            "args": ["$bridgeDir\\mcp-http-bridge.mjs"],
+            "env": {
+                "MCP_URL": "https://agency-agents-mcp.regtransfers.dev"
+            }
+        }
+    }
+}
+"@ | Set-Content "$configDir\mcp.json"
+\`\`\`
+
+**3. Restart your IDE**
+
+That's it! You now have access to 144 agents and 1,412 skills.
+
+**Test it:**
+- Open Copilot Chat
+- Type: `List available agents`
+- Should see 144 agent personas
+
+---
+## Local Development (Advanced)
 ### 1. Clone the repository
 \`\`\`bash
 git clone https://github.com/Regtransfers/agency-agents-mcp.git
@@ -371,7 +457,9 @@ agency-agents-mcp/
 │   └── azure-devops/
 │       ├── azure-pipelines.yml               # Pipeline template
 │       └── buildimages.yaml                  # Build job definitions
-├── server.mjs                                # MCP server
+├── server.mjs                                # MCP server (stdio protocol)
+├── http-wrapper.mjs                          # HTTP wrapper for production
+├── mcp-http-bridge.mjs                       # HTTP-to-stdio bridge for IDE
 ├── package.json
 ├── package-lock.json
 ├── Dockerfile                                # Docker image definition
