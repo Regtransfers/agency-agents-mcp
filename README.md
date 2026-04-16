@@ -81,17 +81,20 @@ chmod +x ~/.local/bin/mcp-http-bridge
 
 **2. Configure your IDE:**
 
-**Rider 2025.3+ (New Config Location - Linux/macOS):**
+**Rider 2025.3+ (GitHub Copilot MCP - Linux/macOS):**
+
+Rider 2025.3+ requires both a wrapper script AND a config file. Here's the complete setup:
+
 \`\`\`bash
 # Step 1: Create the wrapper script
 cat > ~/.local/bin/mcp-agency-agents << 'EOF'
 #!/bin/bash
 export MCP_URL="https://agency-agents-mcp.regtransfers.dev"
-exec /home/$USER/.local/bin/mcp-http-bridge "$@"
+exec ~/.local/bin/mcp-http-bridge "$@"
 EOF
 chmod +x ~/.local/bin/mcp-agency-agents
 
-# Step 2: Create the MCP config
+# Step 2: Create the Rider MCP config
 mkdir -p ~/.config/JetBrains/Rider2025.3
 cat > ~/.config/JetBrains/Rider2025.3/mcp_config.json << 'EOF'
 {
@@ -103,6 +106,29 @@ cat > ~/.config/JetBrains/Rider2025.3/mcp_config.json << 'EOF'
   }
 }
 EOF
+
+# Step 3: Also create the GitHub Copilot config (for compatibility)
+mkdir -p ~/.config/github-copilot
+cat > ~/.config/github-copilot/mcp-config.json << 'EOF'
+{
+  "servers": {
+    "agency-agents": {
+      "command": "/home/$USER/.local/bin/mcp-agency-agents",
+      "args": []
+    }
+  }
+}
+EOF
+\`\`\`
+
+**Important:** After creating these files, you MUST restart Rider completely for the MCP configuration to load.
+
+**Verify the setup works:**
+\`\`\`bash
+# Test the wrapper script manually
+~/.local/bin/mcp-agency-agents <<< '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# Should return JSON with 9 tools (list_agents, activate_agent, etc.)
+\`\`\`
 \`\`\`
 
 **Rider/IntelliJ (Older Versions - Linux/macOS):**
@@ -165,14 +191,44 @@ New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 "@ | Set-Content "$configDir\mcp.json"
 \`\`\`
 
-**3. Restart your IDE**
+**3. Restart Rider (CRITICAL)**
 
-That's it! You now have access to 144 agents and 1,412 skills.
+Close Rider completely and reopen it. GitHub Copilot only loads MCP configs at startup.
 
-**Test it:**
-- Open Copilot Chat
-- Type: `List available agents`
-- Should see 144 agent personas
+**4. Verify the setup:**
+
+Open GitHub Copilot Chat and test:
+\`\`\`
+List available agents
+\`\`\`
+
+You should see **144 agent personas** loaded from the remote server.
+
+> **⚠️ IMPORTANT:** When you switch to a different project in Rider, you MUST start a **NEW Copilot conversation** for MCP tools to reload. GitHub Copilot doesn't refresh MCP tools in existing conversations when you change projects.
+> 
+> **Quick fix:** Click the "+" icon in Copilot Chat to start a fresh conversation, then try `List available agents` again.
+
+If you don't see the agents:
+1. **Start a NEW conversation** (click + in Copilot Chat) - this is the most common fix
+   
+2. **Check the config file exists:**
+   \`\`\`bash
+   cat ~/.config/github-copilot/intellij/mcp.json
+   \`\`\`
+   
+3. **Test the bridge manually:**
+   \`\`\`bash
+   MCP_URL="https://agency-agents-mcp.regtransfers.dev" ~/.local/bin/mcp-http-bridge
+   # Paste this and press Enter:
+   # {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+   # Should return: {"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":...
+   \`\`\`
+
+4. **Check Rider logs:**
+   \`\`\`bash
+   tail -f ~/.cache/JetBrains/Rider2025.3/log/idea.log | grep -i "mcp\|agency"
+   \`\`\`
+   Look for "MCP Extension Service" or "agency-agents" mentions
 
 ---
 ## Local Development (Advanced)
@@ -503,7 +559,9 @@ IDE Config Files:
 ## Troubleshooting
 | Symptom | Fix |
 |---|---|
-| **Rider 2025.3 - Tools not loading** | Rider 2025.3 changed config location. Create wrapper script at `~/.local/bin/mcp-agency-agents` and config at `~/.config/JetBrains/Rider2025.3/mcp_config.json`. See "Rider 2025.3+" setup above. Check logs at `~/.cache/JetBrains/Rider2025.3/log/mcp/agency-agents.log` |
+| **🔥 Switched projects - MCP tools disappeared** | **START A NEW COPILOT CONVERSATION** (click the "+" icon in Copilot Chat). GitHub Copilot loads MCP tools per-conversation. When you switch projects, existing conversations keep stale tools. Fresh conversation = fresh MCP tools. This is the #1 most common issue. |
+| **Rider 2025.3 - GitHub Copilot doesn't load MCP tools** | Rider 2025.3 requires TWO config files: 1) `~/.config/JetBrains/Rider2025.3/mcp_config.json` AND 2) `~/.config/github-copilot/mcp-config.json`. Both should point to the wrapper script at `~/.local/bin/mcp-agency-agents`. The wrapper script MUST have `exec ~/.local/bin/mcp-http-bridge "$@"` (not just the export). After creating/updating, **restart Rider completely**. Test the wrapper manually: `~/.local/bin/mcp-agency-agents <<< '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` should return 9 tools. |
+| **"I don't have access to those MCP tools"** | **First:** Start a NEW Copilot conversation (click +). **Then** if still broken: Check `~/.config/JetBrains/Rider2025.3/options/llm.mcpServers.xml` has the command option. Restart Rider and open a new conversation. If STILL failing: verify the bridge script is executable (`chmod +x ~/.local/bin/mcp-http-bridge`). |
 | **MCP server doesn't start / tools not showing** | Open \`mcp.json\` and check that \`"command"\` is the **absolute path** to node (e.g. \`/usr/bin/node\`, not just \`node\`). IDEs don't inherit your shell PATH. Run \`which node\` to find it. |
 | Copilot doesn't show the agent tools | Restart the IDE. Verify \`mcp.json\` exists in the correct directory and uses absolute paths. |
 | Server crashes on startup | Run \`node server.mjs\` from the project directory manually to see the error. Usually a missing \`npm install\`. |
