@@ -18,6 +18,12 @@ const __dirname = dirname(__filename);
 const AGENTS_DIR = process.env.AGENTS_DIR || join(__dirname, "agents");
 
 // ---------------------------------------------------------------------------
+// Skills catalogue — loaded once at startup from ./skills/
+// Override the directory with the SKILLS_DIR environment variable.
+// ---------------------------------------------------------------------------
+const SKILLS_DIR = process.env.SKILLS_DIR || join(__dirname, "skills");
+
+// ---------------------------------------------------------------------------
 // Shared instructions — loaded once at startup.
 // Every .md file in this directory is prepended to every agent activation so
 // that all personas share the same baseline standards (e.g. clean code rules).
@@ -29,6 +35,9 @@ const SHARED_INSTRUCTIONS_DIR =
 
 /** @type {Map<string, {slug: string, name: string, description: string, body: string}>} */
 const catalogue = new Map();
+
+/** @type {Map<string, {id: string, name: string, description: string, category: string, path: string, body: string}>} */
+const skillsCatalogue = new Map();
 
 /** @type {string} Combined text of all shared instruction files */
 let sharedInstructions = "";
@@ -79,8 +88,64 @@ function loadAgents() {
   }
 }
 
+function loadSkills() {
+  if (!existsSync(SKILLS_DIR)) return;
+
+  // Recursively load all .md files from skills directory
+  function loadSkillsRecursive(dir, category = "") {
+    if (!existsSync(dir)) return;
+
+    for (const file of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, file.name);
+      
+      if (file.isDirectory()) {
+        // Recursively load subdirectories
+        const subCategory = category ? `${category}/${file.name}` : file.name;
+        loadSkillsRecursive(fullPath, subCategory);
+      } else if (file.name.endsWith(".md") && file.name !== "README.md") {
+        const id = basename(file.name, ".md");
+        const raw = readFileSync(fullPath, "utf-8");
+
+        // Parse YAML frontmatter
+        let name = id;
+        let description = "";
+        let skillCategory = category || "uncategorized";
+        let body = raw;
+
+        const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+        if (fmMatch) {
+          const frontmatter = fmMatch[1];
+          body = fmMatch[2];
+
+          const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+          if (nameMatch) name = nameMatch[1].trim();
+
+          const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+          if (descMatch) description = descMatch[1].trim();
+
+          const catMatch = frontmatter.match(/^category:\s*(.+)$/m);
+          if (catMatch) skillCategory = catMatch[1].trim();
+        }
+
+        const relativePath = fullPath.replace(SKILLS_DIR + "/", "");
+        skillsCatalogue.set(id, { 
+          id, 
+          name, 
+          description, 
+          category: skillCategory, 
+          path: relativePath,
+          body 
+        });
+      }
+    }
+  }
+
+  loadSkillsRecursive(SKILLS_DIR);
+}
+
 loadSharedInstructions();
 loadAgents();
+loadSkills();
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -318,15 +383,220 @@ server.tool(
   }
 );
 
-// Tool 5: health check endpoint for Kubernetes probes
+// Tool 5: list available skills with optional category filter
+server.tool(
+  "list_skills",
+  "List all available skills. Optionally filter by category (e.g. ai-ml, backend, frontend, security, devops, automation).",
+  {
+    category: z
+      .string()
+      .optional()
+      .describe(
+        "Filter skills by category, e.g. 'ai-ml', 'backend', 'frontend', 'security'"
+      ),
+  },
+  async ({ category }) => {
+    let skills = [...skillsCatalogue.values()];
+
+    if (category) {
+      const filterCat = category.toLowerCase();
+      skills = skills.filter((s) => s.category.toLowerCase() === filterCat);
+    }
+
+    if (skills.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: category
+              ? `No skills found in category "${category}". Use list_skills without a filter to see all, or use get_skill_categories to see available categories.`
+              : "No skills installed.",
+          },
+        ],
+      };
+    }
+
+    const lines = skills.map(
+      (s) => `- **${s.name}** (\`${s.id}\`) [${s.category}]: ${s.description || "(no description)"}`
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `## Available Skills (${skills.length})\n\n${lines.join("\n")}`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 6: activate a skill — returns the full skill instructions
+server.tool(
+  "activate_skill",
+  "Activate a skill by ID or name. Returns the full skill instructions for you to follow. Use this when the user asks for a specific capability (e.g. 'use React patterns', 'apply API design best practices').",
+  {
+    query: z
+      .string()
+      .describe(
+        "The skill ID or name to activate, e.g. 'react-patterns', 'api-design-principles'"
+      ),
+  },
+  async ({ query }) => {
+    const normalised = query.toLowerCase().replace(/\s+/g, "-");
+
+    // Try exact ID match first
+    let skill = skillsCatalogue.get(normalised);
+
+    // Fuzzy: find any skill whose ID or name contains the query
+    if (!skill) {
+      const candidates = [...skillsCatalogue.values()].filter(
+        (s) =>
+          s.id.includes(normalised) ||
+          s.name.toLowerCase().includes(normalised.replace(/-/g, " "))
+      );
+      if (candidates.length === 1) {
+        skill = candidates[0];
+      } else if (candidates.length > 1) {
+        const list = candidates
+          .slice(0, 10)
+          .map((s) => `- ${s.name} (\`${s.id}\`) [${s.category}]`)
+          .join("\n");
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Multiple skills match "${query}". Please be more specific:\n\n${list}`,
+            },
+          ],
+        };
+      }
+    }
+
+    if (!skill) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No skill found matching "${query}". Use the list_skills or search_skills tool to see what's available.`,
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `# Activating Skill: ${skill.name}\n\n**Category:** ${skill.category}\n\n---\n\n${skill.body}`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 7: search skills by keyword
+server.tool(
+  "search_skills",
+  "Search skills by keyword. Searches skill names, descriptions, categories, and content.",
+  {
+    keyword: z.string().describe("Keyword to search for across all skills"),
+    limit: z
+      .number()
+      .optional()
+      .default(10)
+      .describe("Maximum number of results to return (default 10)"),
+  },
+  async ({ keyword, limit }) => {
+    const term = keyword.toLowerCase();
+    const matches = [...skillsCatalogue.values()]
+      .filter(
+        (s) =>
+          s.id.includes(term) ||
+          s.name.toLowerCase().includes(term) ||
+          s.description.toLowerCase().includes(term) ||
+          s.category.toLowerCase().includes(term) ||
+          s.body.toLowerCase().includes(term)
+      )
+      .slice(0, limit || 10);
+
+    if (matches.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No skills found matching "${keyword}".`,
+          },
+        ],
+      };
+    }
+
+    const lines = matches.map(
+      (s) => `- **${s.name}** (\`${s.id}\`) [${s.category}]: ${s.description || "(no description)"}`
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `## Search Results for "${keyword}" (${matches.length} match${matches.length === 1 ? "" : "es"})\n\n${lines.join("\n")}`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 8: get skill categories
+server.tool(
+  "get_skill_categories",
+  "Get all available skill categories with counts. Useful to explore what types of skills are available.",
+  {},
+  async () => {
+    const skills = [...skillsCatalogue.values()];
+    
+    if (skills.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No skills installed.",
+          },
+        ],
+      };
+    }
+
+    // Group by category and count
+    const categoryCounts = new Map();
+    for (const skill of skills) {
+      const cat = skill.category || "uncategorized";
+      categoryCounts.set(cat, (categoryCounts.get(cat) || 0) + 1);
+    }
+
+    // Sort by count descending
+    const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
+    const lines = sorted.map(([cat, count]) => `- **${cat}**: ${count} skill${count === 1 ? "" : "s"}`);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `## Skill Categories (${sorted.length})\n\n${lines.join("\n")}\n\n---\n\n**Total Skills:** ${skills.length}`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 9: health check endpoint for Kubernetes probes
 server.tool(
   "healthz",
   "Health check endpoint for Kubernetes liveness/readiness probes. Returns server status and agent catalogue information.",
   {},
   async () => {
     const agentCount = catalogue.size;
+    const skillCount = skillsCatalogue.size;
     const hasSharedInstructions = sharedInstructions.length > 0;
-    const isHealthy = agentCount > 0;
+    const isHealthy = agentCount > 0 || skillCount > 0;
     
     const status = {
       status: isHealthy ? "healthy" : "unhealthy",
@@ -334,6 +604,10 @@ server.tool(
       agents: {
         total: agentCount,
         directory: AGENTS_DIR,
+      },
+      skills: {
+        total: skillCount,
+        directory: SKILLS_DIR,
       },
       sharedInstructions: {
         loaded: hasSharedInstructions,

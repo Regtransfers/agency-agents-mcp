@@ -11,8 +11,9 @@ RUN npm install --legacy-peer-deps
 # Copy application files
 COPY . .
 
-# Ensure proper permissions for agent and instruction directories
+# Ensure proper permissions for agent, skills, and instruction directories
 RUN mkdir -p /app/agents && \
+    mkdir -p /app/skills && \
     mkdir -p /app/shared-instructions && \
     chmod -R 755 /app
 
