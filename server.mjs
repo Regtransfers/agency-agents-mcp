@@ -1,13 +1,3 @@
-const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents");
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-#!/usr/bin/env node
-await server.connect(transport);
-
-  join(homedir(), ".github", "shared-instructions");
-const AGENTS_DIR = process.env.AGENTS_DIR || join(homedir(), ".github", "agents");
-// Agent catalogue — loaded once at startup from ~/.github/agents/
-import { join, basename } from "path";
-import { homedir } from "os";
 #!/usr/bin/env node
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
