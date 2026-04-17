@@ -9,10 +9,10 @@ ls -lh /home/aaron/.local/bin/mcp-agency-agents
 echo ""
 
 echo "2. Testing MCP Server Response:"
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | /home/aaron/.local/bin/mcp-agency-agents 2>&1 | head -3
+(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'; sleep 0.3) | /home/aaron/.local/bin/mcp-agency-agents 2>&1 | head -1
 echo ""
-
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | timeout 5 /home/aaron/.local/bin/mcp-agency-agents 2>&1 | head -10
+echo "   Testing tools/list (showing first 3 tools):"
+(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'; echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'; sleep 0.3) | /home/aaron/.local/bin/mcp-agency-agents 2>&1 | grep -o '"name":"[^"]*"' | head -9
 echo ""
 
 echo "3. Rider 2026.1 MCP Config Location:"
