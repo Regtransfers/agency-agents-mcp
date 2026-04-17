@@ -91,25 +91,29 @@ function loadAgents() {
 function loadSkills() {
   if (!existsSync(SKILLS_DIR)) return;
 
-  // Recursively load all .md files from skills directory
-  function loadSkillsRecursive(dir, category = "") {
+  // Each folder in SKILLS_DIR is a skill
+  // The actual skill content is in SKILL.md within each folder
+  function loadSkillsRecursive(dir, parentPath = "") {
     if (!existsSync(dir)) return;
 
-    for (const file of readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = join(dir, file.name);
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
       
-      if (file.isDirectory()) {
-        // Recursively load subdirectories
-        const subCategory = category ? `${category}/${file.name}` : file.name;
-        loadSkillsRecursive(fullPath, subCategory);
-      } else if (file.name.endsWith(".md") && file.name !== "README.md") {
-        const id = basename(file.name, ".md");
-        const raw = readFileSync(fullPath, "utf-8");
+      const skillFolder = join(dir, entry.name);
+      const skillFilePath = join(skillFolder, "SKILL.md");
+      
+      // Build the relative path for this folder
+      const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+      
+      // Check if this folder contains a SKILL.md file
+      if (existsSync(skillFilePath)) {
+        const raw = readFileSync(skillFilePath, "utf-8");
+        const id = relativePath;
 
         // Parse YAML frontmatter
-        let name = id;
+        let name = entry.name.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase());
         let description = "";
-        let skillCategory = category || "uncategorized";
+        let skillCategory = parentPath || "uncategorized";
         let body = raw;
 
         const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -127,7 +131,6 @@ function loadSkills() {
           if (catMatch) skillCategory = catMatch[1].trim();
         }
 
-        const relativePath = fullPath.replace(SKILLS_DIR + "/", "");
         skillsCatalogue.set(id, { 
           id, 
           name, 
@@ -137,6 +140,9 @@ function loadSkills() {
           body 
         });
       }
+      
+      // Recursively check subdirectories for more skills (whether or not this folder had SKILL.md)
+      loadSkillsRecursive(skillFolder, relativePath);
     }
   }
 
@@ -386,7 +392,7 @@ server.tool(
 // Tool 5: list available skills with optional category filter
 server.tool(
   "list_skills",
-  "List all available skills. Optionally filter by category (e.g. ai-ml, backend, frontend, security, devops, automation).",
+  "List all available skills (names only for quick browsing). Returns all 1400+ skills. Use search_skills to find specific skills, or activate_skill to get full details.",
   {
     category: z
       .string()
@@ -416,15 +422,16 @@ server.tool(
       };
     }
 
+    // Return minimal data: just name, id, and category (no descriptions or body)
     const lines = skills.map(
-      (s) => `- **${s.name}** (\`${s.id}\`) [${s.category}]: ${s.description || "(no description)"}`
+      (s) => `- **${s.name}** (\`${s.id}\`) [${s.category}]`
     );
 
     return {
       content: [
         {
           type: "text",
-          text: `## Available Skills (${skills.length})\n\n${lines.join("\n")}`,
+          text: `## Available Skills (${skills.length})\n\n${lines.join("\n")}\n\n💡 Use \`activate_skill\` with the skill ID to get full details.`,
         },
       ],
     };
