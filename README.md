@@ -153,7 +153,29 @@ mkdir -p ~/.config/github-copilot/intellij && cat > ~/.config/github-copilot/int
 EOF
 \`\`\`
 
-**VS Code (Linux/macOS):**
+**VS Code (All Platforms - Easiest Method):**
+
+1. Open VS Code
+2. Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS)
+3. Type: **MCP: Open User Configuration**
+4. Add the server configuration:
+
+\`\`\`json
+{
+    "servers": {
+        "Regtransfers-Agents": {
+            "url": "https://agency-agents-mcp.regtransfers.dev/",
+            "type": "http"
+        }
+    },
+    "inputs": []
+}
+\`\`\`
+
+5. Save the file and restart VS Code
+6. Done! No bridge script needed for VS Code with HTTP servers.
+
+**VS Code (Linux/macOS - Alternative Method with Bridge):**
 \`\`\`bash
 mkdir -p ~/.config/github-copilot/vscode && cat > ~/.config/github-copilot/vscode/mcp.json << 'EOF'
 {
