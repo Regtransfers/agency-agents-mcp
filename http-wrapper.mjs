@@ -61,7 +61,7 @@ app.get('/', (req, res) => {
 });
 
 // Main MCP proxy endpoint
-app.post('/', (req, res) => {
+app.post('/', async (req, res) => {
   console.log('Received JSON-RPC request:', JSON.stringify(req.body));
   
   // Spawn the MCP server process with increased buffer size
@@ -70,10 +70,10 @@ app.post('/', (req, res) => {
     maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large responses
   });
 
-  let outputChunks = [];
+  let outputBuffer = '';
   let errorOutput = '';
   let responseSent = false;
-  let stdoutEnded = false;
+  let responses = [];
 
   // Set a timeout for the request (30 seconds)
   const timeout = setTimeout(() => {
@@ -93,15 +93,24 @@ app.post('/', (req, res) => {
     }
   }, 30000);
 
-  // Capture stdout in chunks
+  // Capture stdout line by line (MCP sends one JSON per line)
   mcp.stdout.on('data', (data) => {
-    outputChunks.push(data);
-  });
-
-  // Wait for stdout to fully end before processing
-  mcp.stdout.on('end', () => {
-    stdoutEnded = true;
-    console.log('stdout stream ended, received', outputChunks.length, 'chunks');
+    outputBuffer += data.toString();
+    
+    // Process complete lines
+    const lines = outputBuffer.split('\n');
+    outputBuffer = lines.pop(); // Keep incomplete line in buffer
+    
+    for (const line of lines) {
+      if (line.trim()) {
+        try {
+          const msg = JSON.parse(line);
+          responses.push(msg);
+        } catch (err) {
+          console.error('Failed to parse line:', line);
+        }
+      }
+    }
   });
 
   // Capture stderr
@@ -110,79 +119,48 @@ app.post('/', (req, res) => {
     console.error('MCP stderr:', data.toString());
   });
 
-  // Handle process completion - but wait for stdout to finish
+  // Handle process completion
   mcp.on('close', (code) => {
-    // Give stdout a moment to finish if it hasn't yet
-    const processResponse = () => {
-      clearTimeout(timeout);
-      
-      if (responseSent) {
-        return; // Already handled by timeout
-      }
-      
-      responseSent = true;
-
-      if (code !== 0) {
-        console.error('MCP process exited with code:', code);
-        console.error('Error output:', errorOutput);
-        return res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Internal error',
-            data: { exitCode: code, stderr: errorOutput }
-          },
-          id: req.body.id || null
-        });
-      }
-
-      // Concatenate all chunks
-      const output = Buffer.concat(outputChunks).toString('utf8');
-      
-      if (!output || output.trim().length === 0) {
-        console.error('Empty output received from MCP server');
-        return res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Empty response from MCP server',
-            data: { stderr: errorOutput }
-          },
-          id: req.body.id || null
-        });
-      }
-      
-      try {
-        const response = JSON.parse(output);
-        console.log('MCP response received successfully (size:', output.length, 'bytes)');
-        res.json(response);
-      } catch (err) {
-        console.error('Failed to parse MCP response:', err);
-        console.error('Raw output length:', output.length);
-        console.error('Raw output preview:', output.substring(0, 500));
-        res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32700,
-            message: 'Parse error',
-            data: { 
-              error: err.message,
-              outputLength: output.length,
-              preview: output.substring(0, 200)
-            }
-          },
-          id: req.body.id || null
-        });
-      }
-    };
-
-    // If stdout hasn't ended yet, wait a bit for it
-    if (!stdoutEnded) {
-      console.log('Process closed but stdout not ended, waiting...');
-      setTimeout(processResponse, 100);
-    } else {
-      processResponse();
+    clearTimeout(timeout);
+    
+    if (responseSent) {
+      return; // Already handled by timeout
     }
+    
+    responseSent = true;
+
+    if (code !== 0) {
+      console.error('MCP process exited with code:', code);
+      console.error('Error output:', errorOutput);
+      return res.status(500).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: 'Internal error',
+          data: { exitCode: code, stderr: errorOutput }
+        },
+        id: req.body.id || null
+      });
+    }
+
+    if (responses.length === 0) {
+      console.error('No responses received from MCP server');
+      console.error('Stderr:', errorOutput);
+      return res.status(500).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: 'No response from MCP server',
+          data: { stderr: errorOutput }
+        },
+        id: req.body.id || null
+      });
+    }
+
+    // Return the last response (the one matching our request ID)
+    const targetResponse = responses.find(r => r.id === req.body.id) || responses[responses.length - 1];
+    console.log('MCP response received successfully');
+    res.json(targetResponse);
   });
 
   // Handle spawn errors
@@ -204,7 +182,34 @@ app.post('/', (req, res) => {
     }
   });
 
-  // Write the JSON-RPC request to stdin
+  // MCP protocol sequence:
+  // 1. Send initialize
+  // 2. Wait for response
+  // 3. Send initialized notification
+  // 4. Send the actual request
+  
+  // Step 1: Initialize
+  mcp.stdin.write(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 0,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: {
+        name: 'http-wrapper',
+        version: '1.0.0'
+      }
+    }
+  }) + '\n');
+
+  // Step 2: Send initialized notification
+  mcp.stdin.write(JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'notifications/initialized'
+  }) + '\n');
+
+  // Step 3: Send the actual request
   mcp.stdin.write(JSON.stringify(req.body) + '\n');
   mcp.stdin.end();
 });

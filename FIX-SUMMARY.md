@@ -1,4 +1,4 @@
-# Fix Complete: JSON Truncation & Skills Loading
+# Fix Complete: JSON Truncation, Skills Loading & MCP Protocol
 
 ## Issues Fixed
 
@@ -6,13 +6,26 @@
 **Problem:** HTTP wrapper was closing before stdout was fully flushed, causing incomplete JSON responses.
 
 **Solution:** 
-- Added `stdout.on('end')` listener to track stream completion
-- Added 100ms delay if process closes before stdout ends
-- Proper buffering with chunk collection
+- Changed from chunk buffering to line-by-line JSON parsing (MCP sends one JSON per line)
+- Proper handling of multiple responses in the stream
+- Added response matching by request ID
 
 **File:** `http-wrapper.mjs`
 
-### 2. **Skills Loading Error** ✅
+### 2. **MCP Protocol Initialization** ✅  
+**Problem:** HTTP wrapper was sending tool calls without proper MCP initialization, causing "Empty output" errors.
+
+**Solution:**
+- Added proper MCP protocol sequence for each request:
+  1. Send `initialize` request
+  2. Send `initialized` notification
+  3. Then send the actual tool call
+- Parse responses line-by-line to handle multiple JSON-RPC messages
+- Match responses by request ID
+
+**File:** `http-wrapper.mjs`
+
+### 3. **Skills Loading Error** ✅
 **Problem:** Server was loading every `.md` file as a skill (2472 files), but only 787 were valid skills. Many duplicate IDs caused overwrites.
 
 **Solution:**
@@ -23,7 +36,7 @@
 
 **File:** `server.mjs` - `loadSkills()` function
 
-### 3. **Large Response Optimization** ✅
+### 4. **Large Response Optimization** ✅
 **Problem:** `list_skills` was returning ALL 1412 skills with descriptions, creating huge responses (100KB+).
 
 **Solution:**
