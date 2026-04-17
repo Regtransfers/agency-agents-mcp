@@ -569,11 +569,37 @@ IDE Config Files:
 |---|---|
 | **🔥 Switched projects - MCP tools disappeared** | **START A NEW COPILOT CONVERSATION** (click the "+" icon in Copilot Chat). GitHub Copilot loads MCP tools per-conversation. When you switch projects, existing conversations keep stale tools. Fresh conversation = fresh MCP tools. This is the #1 most common issue. |
 | **"I don't have access to those MCP tools"** | **First:** Start a NEW Copilot conversation (click +). **Then** if still broken: Restart Rider completely and check the MCP logs (see below). |
-| **Rider 2025.3 - Tools not loading** | You need BOTH config files AND a wrapper script. See detailed steps below. |
+| **⚠️ MCP Plugin Disabled in Rider** | **CRITICAL:** Check if `~/.config/JetBrains/Rider*/disabled_plugins.txt` contains `com.intellij.mcpServer`. If it does, the MCP plugin is disabled! Remove that line or delete the file, then restart Rider. This is a common gotcha that completely breaks MCP integration. |
+| **Rider 2025.3+ / 2026.1+ - Tools not loading** | You need BOTH config files AND a wrapper script. See detailed steps below. Also verify MCP plugin is not disabled (see above). |
 
 ### Detailed Troubleshooting for Rider 2025.3+
 
 #### Step 1: Verify All Required Files Exist
+
+**⚠️ CRITICAL: Check if MCP Plugin is Disabled**
+
+Rider/IntelliJ can disable plugins, which completely breaks MCP integration. Check this FIRST:
+
+```bash
+# Check if MCP plugin is disabled (Rider 2025.3)
+cat ~/.config/JetBrains/Rider2025.3/disabled_plugins.txt 2>/dev/null | grep mcpServer
+
+# For Rider 2026.1
+cat ~/.config/JetBrains/Rider2026.1/disabled_plugins.txt 2>/dev/null | grep mcpServer
+```
+
+**If you see `com.intellij.mcpServer` in the output:**
+- The MCP plugin is **DISABLED** and MCP will NOT work!
+- **Fix it:** Remove that line from the file, or delete the entire `disabled_plugins.txt` file
+- **Then:** Restart Rider completely
+
+**Verify the plugin is enabled:**
+```bash
+# After restarting Rider, check the logs
+grep "MCP Extension Service started successfully" ~/.cache/JetBrains/Rider*/log/idea.log
+
+# Should show: "MCP Extension Service started successfully"
+```
 
 **Check the wrapper script exists and is executable:**
 ```bash
@@ -776,6 +802,85 @@ echo -e "\n=== Manual Test ===" && \
 ```
 
 Share the output when asking for help.
+
+---
+## Common Gotchas & Pitfalls
+
+### 🔴 MCP Plugin Disabled in Rider
+
+**The Problem:**
+Rider/IntelliJ can disable plugins through the `disabled_plugins.txt` file. If `com.intellij.mcpServer` is in this file, the MCP plugin will not load at all, and you'll get NO MCP tools despite having perfect configuration files.
+
+**Symptoms:**
+- All config files are correct
+- Manual tests of the MCP server work fine
+- Rider logs show NO mention of "MCP Extension Service" or "mcpServer"
+- GitHub Copilot works, but MCP tools never appear
+
+**How to Check:**
+```bash
+# Check if the plugin is disabled
+cat ~/.config/JetBrains/Rider*/disabled_plugins.txt | grep mcpServer
+```
+
+**The Fix:**
+```bash
+# Option 1: Remove the disabled plugin entry
+# Edit the file and remove the line containing com.intellij.mcpServer
+
+# Option 2: Delete the entire file (if you don't have other disabled plugins)
+rm ~/.config/JetBrains/Rider*/disabled_plugins.txt
+
+# Then: COMPLETELY restart Rider (close all windows)
+```
+
+**Verify it's fixed:**
+```bash
+grep "MCP Extension Service started successfully" ~/.cache/JetBrains/Rider*/log/idea.log
+# Should show: MCP Extension Service started successfully
+```
+
+### 🔴 Switching Projects Breaks MCP Tools
+
+**The Problem:**
+GitHub Copilot loads MCP tools per-conversation, not per-project. When you switch projects, existing conversations retain the MCP tools from the PREVIOUS project.
+
+**The Fix:**
+Click the "**+**" icon in Copilot Chat to start a **NEW conversation**. The new conversation will load MCP tools for the current project.
+
+### 🔴 Rider Ignores Config Changes
+
+**The Problem:**
+Rider only loads `mcp.json` and related configs at startup. Editing them while Rider is running has no effect.
+
+**The Fix:**
+COMPLETELY close Rider (all windows) and restart after making any config changes.
+
+### 🔴 Relative Paths Don't Work
+
+**The Problem:**
+MCP configs don't expand `~`, `$HOME`, `%USERPROFILE%`, or environment variables.
+
+**The Fix:**
+Always use **fully resolved absolute paths** in all config files:
+- ✅ `/home/aaron/.local/bin/mcp-agency-agents`
+- ❌ `~/.local/bin/mcp-agency-agents`
+- ❌ `$HOME/.local/bin/mcp-agency-agents`
+
+### 🔴 Multiple Rider Versions Installed
+
+**The Problem:**
+If you have Rider 2025.3 AND Rider 2026.1 installed, make sure you're editing the config for the version you're actually running.
+
+**The Fix:**
+```bash
+# Check which Rider version is running
+ps aux | grep -i rider
+
+# Edit configs for the CORRECT version:
+# Rider 2025.3: ~/.config/JetBrains/Rider2025.3/
+# Rider 2026.1: ~/.config/JetBrains/Rider2026.1/
+```
 
 ---
 ## How It Works

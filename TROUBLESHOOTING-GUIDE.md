@@ -2,6 +2,52 @@
 
 ## 🚨 Most Common Issues (95% of problems)
 
+### 0. "MCP Plugin is Disabled in Rider" ⚠️ **CHECK THIS FIRST!**
+**Cause:** The `com.intellij.mcpServer` plugin is disabled in Rider's `disabled_plugins.txt` file. This completely breaks MCP - no amount of config tweaking will fix it until the plugin is re-enabled.
+
+**Symptoms:**
+- All config files are perfect
+- Manual wrapper script tests work fine
+- Rider logs show ZERO mentions of "MCP Extension Service" or "mcpServer"
+- GitHub Copilot works, but MCP tools never appear
+
+**Solution:**
+
+**Step 1:** Check if the plugin is disabled
+```bash
+# For Rider 2025.3
+cat ~/.config/JetBrains/Rider2025.3/disabled_plugins.txt 2>/dev/null | grep mcpServer
+
+# For Rider 2026.1
+cat ~/.config/JetBrains/Rider2026.1/disabled_plugins.txt 2>/dev/null | grep mcpServer
+```
+
+**If you see `com.intellij.mcpServer`** - the plugin is DISABLED!
+
+**Step 2:** Fix it
+```bash
+# Option 1: Delete the entire file (if you don't have other disabled plugins)
+rm ~/.config/JetBrains/Rider*/disabled_plugins.txt
+
+# Option 2: Edit the file and remove ONLY the line containing com.intellij.mcpServer
+# (Use your preferred text editor)
+```
+
+**Step 3:** Restart Rider COMPLETELY
+- Close ALL Rider windows
+- Wait 10 seconds
+- Reopen Rider
+
+**Step 4:** Verify it's fixed
+```bash
+# Should show "MCP Extension Service started successfully"
+grep "MCP Extension Service started successfully" ~/.cache/JetBrains/Rider*/log/idea.log
+```
+
+**If you see that message:** ✅ MCP plugin is now enabled and loaded!
+
+---
+
 ### 1. "Tools disappeared after switching projects"
 **Cause:** GitHub Copilot loads MCP tools per-conversation, not globally.
 
@@ -208,6 +254,10 @@ echo "=== SYSTEM INFO ===" && \
 echo "OS: $(uname -a)" && \
 echo "Node: $(node -v 2>&1)" && \
 echo "User: $(whoami)" && \
+echo -e "\n=== ⚠️ DISABLED PLUGIN CHECK (CRITICAL) ===" && \
+cat ~/.config/JetBrains/Rider*/disabled_plugins.txt 2>/dev/null | grep -i mcp || echo "✅ No MCP plugin disabled (or file doesn't exist)" && \
+echo -e "\n=== MCP PLUGIN LOADED CHECK ===" && \
+grep "MCP Extension Service" ~/.cache/JetBrains/Rider*/log/idea.log | tail -1 || echo "❌ MCP Extension Service NOT found in logs!" && \
 echo -e "\n=== WRAPPER SCRIPT ===" && \
 cat ~/.local/bin/mcp-agency-agents 2>&1 && \
 echo -e "\n=== WRAPPER PERMISSIONS ===" && \
@@ -261,6 +311,9 @@ cat ~/.config/JetBrains/Rider2025.3/mcp_config.json
 ---
 
 ## ❓ FAQ
+
+### Q: How do I know if the MCP plugin is disabled?
+**A:** Run `cat ~/.config/JetBrains/Rider*/disabled_plugins.txt | grep mcpServer`. If you see `com.intellij.mcpServer`, the plugin is disabled. Delete that line or the entire file, then restart Rider. You can verify it's enabled by checking the logs: `grep "MCP Extension Service started successfully" ~/.cache/JetBrains/Rider*/log/idea.log`
 
 ### Q: Why does the server stop after I close Copilot Chat?
 **A:** This is normal! Rider stops MCP servers when idle to save resources. The server will restart automatically when you open a new Copilot conversation.
